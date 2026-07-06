@@ -7,7 +7,6 @@ import type {
   PlannedMatch,
   PlannedMatchProtection,
   PlayerRuntimeStatus,
-  MatchRuntimeStatus,
 } from '../types'
 import { matchId, isPreserved, nextSchedule } from '../utils'
 import { plannerService } from '../planner'
@@ -106,19 +105,6 @@ function persistInBackground(schedule: SessionSchedule): void {
   })
 }
 
-/**
- * Number of courts in simultaneous use, derived from how many distinct
- * `courtNumber` values appear on the schedule's matches. Falls back to 1 —
- * today's generators always leave `courtNumber` null (single-court,
- * sequential scheduling), so this correctly reads as "1 court" until
- * multi-court assignment exists.
- */
-function distinctCourtCount(matches: readonly PlannedMatch[]): number {
-  const courts = new Set(
-    matches.map(m => m.courtNumber).filter((c): c is number => c !== null),
-  )
-  return courts.size > 0 ? courts.size : 1
-}
 
 // ── Public API — schedule loading ─────────────────────────────────────────────
 
@@ -249,30 +235,21 @@ function setProtection(
 // ── Public API — session start (sync) ────────────────────────────────────────
 
 /**
- * Initializes every match's runtime status when the organiser starts the
- * session (Sprint F23.1 foundation): the first N matches (N = the session's
- * configured Number of Courts) become LIVE, everything else becomes
- * PENDING. No match ever becomes FINISHED here — that is a future sprint's
- * concern. Purely additive: does not touch teams, balance, quality, or any
- * other field on the matches.
- *
- * `courtCount` should be the session's persisted Number of Courts; if
- * omitted, falls back to inferring it from the schedule's own matches (see
- * `distinctCourtCount`) for backward compatibility.
+ * Marks the session as started (Critical Runtime Review): every match
+ * begins, and stays, PENDING — nothing is force-activated. The organiser
+ * starts each court's match individually via Start Match (see
+ * match-runtime.service's startMatch), which is what actually transitions
+ * PENDING -> LIVE. This used to auto-activate the first N matches; that
+ * behaved like a planning screen deciding for the organiser which court
+ * begins first, which is exactly the ambiguity this review asked to remove.
+ * `_courtCount` is accepted (existing callers already pass the session's
+ * Number of Courts) but no longer used — kept for call-site stability.
  */
-function startMatches(schedule: SessionSchedule, courtCount?: number): SessionSchedule {
-  const activeCourts = courtCount ?? distinctCourtCount(schedule.matches)
-  const newMatches = schedule.matches.map((match, index) => {
-    const matchStatus: MatchRuntimeStatus = index < activeCourts ? 'LIVE' : 'PENDING'
-    return { ...match, matchStatus }
-  })
-  const updated = nextSchedule(schedule, { matches: newMatches })
+function startMatches(schedule: SessionSchedule, _courtCount?: number): SessionSchedule {
+  const updated = nextSchedule(schedule, { matches: schedule.matches })
   persistInBackground(updated)
 
   void runtimeAuditService.logEvent(schedule.sessionId, 'SESSION_STARTED', null, 'Session started.').catch(err => {
-    console.error('[schedule.service] audit log failed:', err)
-  })
-  void runtimeAuditService.logEvent(schedule.sessionId, 'ROUND_STARTED', null, 'Round 1 started.', { roundNumber: 1 }).catch(err => {
     console.error('[schedule.service] audit log failed:', err)
   })
 

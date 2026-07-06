@@ -7,35 +7,13 @@ import {
   CardContent,
   CardFooter,
 } from '@/shared/components/ui/card'
+import { getAvatarColor, getInitials } from '../utils/avatar'
 import type { Player } from '../types'
 
 interface PlayerCardProps {
   player: Player
   onEdit: (player: Player) => void
   onArchive: (player: Player) => void
-}
-
-function getAvatarColor(name: string): string {
-  const COLORS = [
-    'bg-red-500',
-    'bg-orange-500',
-    'bg-amber-500',
-    'bg-green-600',
-    'bg-teal-500',
-    'bg-blue-500',
-    'bg-indigo-500',
-    'bg-purple-500',
-    'bg-pink-500',
-    'bg-rose-500',
-  ]
-  const index = (name.codePointAt(0) ?? 0) % COLORS.length
-  return COLORS[index] ?? 'bg-gray-500'
-}
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/)
-  if (parts.length === 1) return (parts[0]?.[0] ?? '').toUpperCase()
-  return ((parts[0]?.[0] ?? '') + (parts[parts.length - 1]?.[0] ?? '')).toUpperCase()
 }
 
 export function PlayerCard({ player, onEdit, onArchive }: PlayerCardProps) {

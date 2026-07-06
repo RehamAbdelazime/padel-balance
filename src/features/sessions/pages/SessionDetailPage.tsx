@@ -26,7 +26,6 @@ import {
   useSessionQuery,
   useStartSessionMutation,
   useFinishSessionMutation,
-  useUpdateSessionMutation,
 } from '../hooks/useSessions'
 import { useSessionAttendanceQuery } from '../hooks/useAttendance'
 import { useSessionMatchesQuery } from '../hooks/useMatches'
@@ -44,10 +43,11 @@ import { SchedulePlanningWizard } from '../components/SchedulePlanningWizard'
 import { ScheduleReviewPanel } from '../components/ScheduleReviewPanel'
 import { RuntimeRecoveryDialog } from '../components/RuntimeRecoveryDialog'
 import { ReplacePlayerDialog } from '../components/ReplacePlayerDialog'
+import { AddReplacementDialog } from '../components/AddReplacementDialog'
 import { ConfirmActionDialog } from '../components/ConfirmActionDialog'
 import type { Session, SessionStatus, MatchWithTeams } from '../types'
 import type { TournamentPlan } from '../planner'
-import { formatSessionDate, formatSessionTime } from '../utils'
+import { formatSessionDate, formatSessionTime, getReplacementCandidates } from '../utils'
 // Cross-feature import: sessions depend on players for attendance management.
 import { usePlayersQuery } from '@/features/players/hooks/usePlayers'
 
@@ -78,7 +78,6 @@ export function SessionDetailPage() {
   const scheduleHook    = useSchedule(sessionId ?? '')
   const startMutation   = useStartSessionMutation()
   const finishMutation  = useFinishSessionMutation()
-  const updateMutation  = useUpdateSessionMutation()
 
   useAutoStartSession(sessionQuery.data, () => scheduleHook.startMatches(sessionQuery.data?.court_count))
 
@@ -95,6 +94,7 @@ export function SessionDetailPage() {
   const [isGenerateDialogOpen, setGenerateDialogOpen]   = useState(false)
   const [isPostponeOpen,       setPostponeOpen]         = useState(false)
   const [recoveryReplaceTargetId, setRecoveryReplaceTargetId] = useState<string | null>(null)
+  const [addReplacementTargetId, setAddReplacementTargetId]   = useState<string | null>(null)
   const [isFinishConfirmOpen, setFinishConfirmOpen]     = useState(false)
 
   // Stable rematch player IDs derived from the selected match.
@@ -141,15 +141,13 @@ export function SessionDetailPage() {
     finishMutation.mutate(sessionId, { onSuccess: () => setFinishConfirmOpen(false) })
   }
 
-  // ── Runtime recovery (Sprint: Runtime Americano Fixes) ────────────────────
+  // ── Runtime recovery (Sprint RT2) ──────────────────────────────────────────
   // Shown instead of a toast when a runtime player-management action's
-  // regeneration couldn't proceed (too few AVAILABLE players).
-  const handleReduceCourts = () => {
-    if (!sessionId || !sessionQuery.data) return
-    const next = Math.max(1, sessionQuery.data.court_count - 1)
-    updateMutation.mutate({ id: sessionId, input: { court_count: next } })
-    scheduleHook.dismissRecovery()
-  }
+  // regeneration couldn't proceed (too few AVAILABLE players). Reduce
+  // Courts was removed from here entirely (Sprint RT2): changing a
+  // session's court count is session management, not a runtime recovery
+  // action — it belongs in Session Settings with its own regeneration flow,
+  // never something Runtime reaches for automatically.
   const handleRecoveryFinishSession = () => {
     handleFinishSession()
     scheduleHook.dismissRecovery()
@@ -188,6 +186,18 @@ export function SessionDetailPage() {
   const matches    = matchesQuery.data    ?? []
   const allPlayers = playersQuery.data    ?? []
 
+  // Whether "Replace Player" is a valid option in the Runtime Recovery
+  // Dialog right now — Sprint RT2 Section 10: never show an unavailable action.
+  const canReplaceInRecovery = scheduleHook.recovery
+    ? getReplacementCandidates(
+        scheduleHook.recovery.playerId,
+        attendees,
+        scheduleHook.schedule?.playerStates ?? new Map(),
+        scheduleHook.schedule?.matches ?? [],
+        session.court_count,
+      ).length > 0
+    : false
+
   /**
    * Defensive fallback: if the lifecycle migration (004/005) hasn't been
    * applied to this database yet, `status` comes back undefined even though
@@ -211,7 +221,7 @@ export function SessionDetailPage() {
 
   return (
     <>
-      <div className="mx-auto max-w-3xl space-y-8">
+      <div className="mx-auto max-w-3xl space-y-6">
 
         {/* Back navigation */}
         <Button
@@ -361,6 +371,7 @@ export function SessionDetailPage() {
             onUnlockMatch={id => scheduleHook.unlockMatch(id)}
             onRemoveMatch={id => scheduleHook.removeMatch(id)}
             onSwapPlayer={(matchId, fromId, toId) => scheduleHook.swapPlayer(matchId, fromId, toId)}
+            onStartMatch={isLive ? matchId => scheduleHook.startMatch(matchId, session.court_count) : undefined}
             onScoreChange={isLive ? (matchId, score) => scheduleHook.setLiveScore(matchId, score) : undefined}
             onFinishMatch={isLive ? matchId => scheduleHook.finishMatch(matchId, session.court_count) : undefined}
             onCancelMatch={isLive ? matchId => scheduleHook.cancelMatch(matchId, session.court_count) : undefined}
@@ -467,12 +478,16 @@ export function SessionDetailPage() {
       <RuntimeRecoveryDialog
         recovery={scheduleHook.recovery}
         attendees={attendees}
+        canReplace={canReplaceInRecovery}
         onUndo={() => scheduleHook.undoRecovery()}
         onOpenReplace={playerId => {
           scheduleHook.dismissRecovery()
           setRecoveryReplaceTargetId(playerId)
         }}
-        onReduceCourts={handleReduceCourts}
+        onOpenAddGuest={playerId => {
+          scheduleHook.dismissRecovery()
+          setAddReplacementTargetId(playerId)
+        }}
         onFinishSession={handleRecoveryFinishSession}
         onDismiss={() => scheduleHook.dismissRecovery()}
       />
@@ -489,6 +504,17 @@ export function SessionDetailPage() {
             ? scheduleHook.swapPlayer(matchId, oldId, newId)
             : scheduleHook.replacePlayer(oldId, newId)
         }
+      />
+      <AddReplacementDialog
+        open={addReplacementTargetId !== null}
+        sessionId={sessionId}
+        attendeePlayerIds={attendees.map(a => a.player_id)}
+        onClose={() => setAddReplacementTargetId(null)}
+        onAdded={newPlayerId => {
+          const outgoingId = addReplacementTargetId
+          setAddReplacementTargetId(null)
+          if (outgoingId) scheduleHook.replacePlayer(outgoingId, newPlayerId)
+        }}
       />
     </>
   )

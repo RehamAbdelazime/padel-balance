@@ -10,10 +10,12 @@ import type { Session } from '../types'
  * `shouldAutoStartSession` naturally returns false on every subsequent
  * check (including after a page reload, since status is persisted).
  *
- * `onAutoStart` must activate the schedule's first round (the same
- * `scheduleHook.startMatches(courtCount)` call the manual "Start Session"
- * button makes) — without it, the session flips to LIVE but every match
- * stays PENDING, since nothing else ever sets matchStatus.
+ * `onAutoStart` calls the same `scheduleHook.startMatches(courtCount)` the
+ * manual "Start Session" button makes — this only marks the session
+ * started (logs the SESSION_STARTED event); it does not activate any
+ * match. Every match stays PENDING until the organiser explicitly presses
+ * Start Match (see match-runtime.service's startMatch) — that is
+ * intentional (Critical Runtime Review), not a gap to fill here.
  */
 export function useAutoStartSession(session: Session | undefined, onAutoStart: () => void): void {
   const startMutation = useStartSessionMutation()

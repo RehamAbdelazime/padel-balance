@@ -29,20 +29,34 @@ import type {
 } from '../types'
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
+// Exported for reuse by Sprint H1's cross-session Player History aggregation
+// (features/players/utils/compute-player-history.ts) — same facts, same
+// rules, just applied across many sessions' matches instead of one.
 
-type DecidedMatch = PlannedMatch & { result: { team1: number; team2: number } }
+export type DecidedMatch = PlannedMatch & { result: { team1: number; team2: number } }
 
-function isDecided(match: PlannedMatch): match is DecidedMatch {
-  return match.result !== undefined && match.result.team1 !== null && match.result.team2 !== null
+/**
+ * A match counts as historical fact only once it is actually FINISHED —
+ * not merely "has a score entered". A LIVE match can have a live-entered,
+ * still-editable score (see match-runtime.service's setLiveScore); until
+ * the organiser presses End Match, that score is provisional and must
+ * never be counted in stats, history, or insights (bug fix: historical
+ * statistics integrity — matches score-presence used to be conflated with
+ * finished-ness, which let PENDING/LIVE/CANCELLED matches leak into
+ * "decided" calculations).
+ */
+export function isDecided(match: PlannedMatch): match is DecidedMatch {
+  return match.matchStatus === 'FINISHED'
+      && match.result !== undefined && match.result.team1 !== null && match.result.team2 !== null
 }
 
-function matchWinner(match: DecidedMatch): MatchWinner {
+export function matchWinner(match: DecidedMatch): MatchWinner {
   if (match.result.team1 > match.result.team2) return 'A'
   if (match.result.team2 > match.result.team1) return 'B'
   return 'DRAW'
 }
 
-function playerTeam(match: PlannedMatch, playerId: string): 'A' | 'B' | null {
+export function playerTeam(match: PlannedMatch, playerId: string): 'A' | 'B' | null {
   if (match.teamA.includes(playerId)) return 'A'
   if (match.teamB.includes(playerId)) return 'B'
   return null
@@ -74,7 +88,8 @@ export function computeRounds(matches: readonly PlannedMatch[], courtCount: numb
 
 // ── Section 3 — Player Performance ───────────────────────────────────────────
 
-function toPlayerMatchResults(matches: readonly PlannedMatch[], playerId: string): PlayerMatchResult[] {
+/** Exported for reuse by Player History (Sprint H1) — same adapter, any match list. */
+export function toPlayerMatchResults(matches: readonly PlannedMatch[], playerId: string): PlayerMatchResult[] {
   const results: PlayerMatchResult[] = []
   for (const match of matches) {
     if (!isDecided(match)) continue
@@ -212,8 +227,12 @@ function scoreMargin(match: MatchReportRow): number | null {
   return match.scoreA !== null && match.scoreB !== null ? Math.abs(match.scoreA - match.scoreB) : null
 }
 
-/** Longest run of consecutive wins for one player, in the session's actual match order. */
-function longestStreakFor(matches: readonly PlannedMatch[], playerId: string): number {
+/**
+ * Longest run of consecutive wins for one player, in match order. Exported
+ * for reuse by Player History (Sprint H1), which passes a cross-session
+ * match list ordered chronologically rather than one session's matches.
+ */
+export function longestStreakFor(matches: readonly PlannedMatch[], playerId: string): number {
   let best = 0
   let current = 0
   for (const match of matches) {

@@ -44,12 +44,6 @@ export function ReplacePlayerDialog({
 
   if (!outgoing) return null
 
-  const candidates = attendees.filter(a => {
-    if (a.player_id === outgoing.player_id) return false
-    const status = playerStates.get(a.player_id)?.status ?? 'AVAILABLE'
-    return status !== 'AVAILABLE' && status !== 'RESTING'
-  })
-
   // The match in the current LIVE (or, failing that, next PENDING) round that
   // contains the outgoing player — This Round Only swaps within it directly.
   const rounds = groupMatchesIntoRounds(matches, courtCount)
@@ -59,6 +53,22 @@ export function ReplacePlayerDialog({
     s => s.match.teamA.includes(outgoing.player_id) || s.match.teamB.includes(outgoing.player_id),
   )?.match
   const thisRoundAvailable = currentRoundMatch !== undefined
+
+  // Valid replacement candidates (Sprint RT2 Section 6/13): attending this
+  // session, currently AVAILABLE (not resting/absent/left/replaced), and not
+  // already occupying a court in the current round — the previous filter
+  // here was inverted (it excluded AVAILABLE players and included
+  // ABSENT/LEFT/REPLACED ones) and never checked round occupancy at all.
+  const currentRoundPlayerIds = new Set(
+    currentRound?.slots.flatMap(s => [...s.match.teamA, ...s.match.teamB]) ?? [],
+  )
+  const candidates = attendees.filter(a => {
+    if (a.player_id === outgoing.player_id) return false
+    const status = playerStates.get(a.player_id)?.status ?? 'AVAILABLE'
+    if (status !== 'AVAILABLE') return false
+    if (currentRoundPlayerIds.has(a.player_id)) return false
+    return true
+  })
 
   const handleConfirm = () => {
     if (!replacementId) return

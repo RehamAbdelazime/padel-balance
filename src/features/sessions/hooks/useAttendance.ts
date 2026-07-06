@@ -28,6 +28,25 @@ export function useAttendanceForSessionsQuery(sessionIds: readonly string[]) {
   })
 }
 
+/** Full attendee rows (with names) for several sessions in one request — Player History only. */
+export function useAttendeesForSessionsQuery(sessionIds: readonly string[]) {
+  const key = [...sessionIds].sort()
+  return useQuery({
+    queryKey: ['sessions', 'attendeesForSessions', key] as const,
+    queryFn: () => attendanceService.getAttendeesForSessions(key),
+    enabled: key.length > 0,
+  })
+}
+
+/** Every non-archived session a player has attended — the seed query for Player History. */
+export function useSessionsForPlayerQuery(playerId: string) {
+  return useQuery({
+    queryKey: ['players', playerId, 'sessions'] as const,
+    queryFn: () => attendanceService.getSessionsForPlayer(playerId),
+    enabled: Boolean(playerId),
+  })
+}
+
 /** Adds a player to a session. Duplicate prevention is enforced by the DB constraint. */
 export function useAddAttendanceMutation(sessionId: string) {
   const { t } = useTranslation()

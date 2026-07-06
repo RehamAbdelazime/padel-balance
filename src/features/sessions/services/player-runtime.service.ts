@@ -7,8 +7,8 @@ import type { RuntimeEventType } from './runtime-audit.service'
 import { computeQuality } from '../generators/custom.generator'
 import { getAllConstraints } from '../constraints'
 import { regenerateRangeWithSolver } from '../generators/shared/generation-helpers'
-import { groupMatchesIntoRounds, deriveRoundStatus, nextSchedule } from '../utils'
-import type { SessionSchedule, PlayerRuntimeState } from '../types'
+import { groupMatchesIntoRounds, deriveRoundStatus, nextSchedule, isPreserved } from '../utils'
+import type { SessionSchedule, PlayerRuntimeState, PlannedMatch } from '../types'
 
 /**
  * player-runtime.service — Runtime Player Management: rest, return, leave,
@@ -216,21 +216,44 @@ async function returnToRotation(sessionId: string, schedule: SessionSchedule, pl
   return outcome
 }
 
+/** Whether a player occupies any future, non-preserved slot — if not, excluding them changes nothing about the remaining schedule. */
+function isScheduledInFuture(matches: readonly PlannedMatch[], courtCount: number, playerId: string): boolean {
+  const boundary = regenerationBoundary(matches, courtCount)
+  return matches.some((m, idx) =>
+    idx >= boundary && !isPreserved(m) && (m.teamA.includes(playerId) || m.teamB.includes(playerId)),
+  )
+}
+
 /**
- * Leave Session — excluded from every future round. If the player is
- * currently in the LIVE round, that round is never touched (regeneration
- * only ever starts after it), so they simply finish it before the
- * exclusion takes effect on the next round onward.
+ * Leave Session (Sprint RT2 Section 5) — excluded from every future round.
+ * If the player is currently in the LIVE round, that round is never
+ * touched (regeneration only ever starts after it), so they simply finish
+ * it before the exclusion takes effect on the next round onward.
+ *
+ * Never regenerates unless it would actually change something: if the
+ * player doesn't occupy any future slot at all (e.g. they'd already
+ * finished their last match, or the schedule doesn't reach that far),
+ * marking them LEFT is the entire action — no solver call, nothing to fix.
+ * The previous version always attempted regeneration regardless, which
+ * could surface a false "recovery" prompt for a departure that didn't
+ * actually require rebuilding anything.
  */
 async function leaveSession(sessionId: string, schedule: SessionSchedule, playerId: string): Promise<RuntimeActionOutcome> {
   const { players, playerIds, courtCount, nameById } = await loadRuntimeContext(sessionId)
   const newStates = setStatus(schedule, playerId, { playerId, status: 'LEFT' })
-  const outcome   = regenerateRemaining(schedule, newStates, players, playerIds, courtCount)
-  persistInBackground(sessionId, outcome.schedule)
 
   const round = currentRoundNumber(schedule.matches, courtCount)
   void logEvent(sessionId, 'LEAVE', playerId,
     `${nameById.get(playerId) ?? playerId} left session${round ? ` after Round ${round}` : ''}.`)
+
+  if (!isScheduledInFuture(schedule.matches, courtCount, playerId)) {
+    const updated = nextSchedule(schedule, { playerStates: newStates })
+    persistInBackground(sessionId, updated)
+    return { schedule: updated, regenerationFailed: false }
+  }
+
+  const outcome = regenerateRemaining(schedule, newStates, players, playerIds, courtCount)
+  persistInBackground(sessionId, outcome.schedule)
   return outcome
 }
 
@@ -250,9 +273,16 @@ async function markAbsent(sessionId: string, schedule: SessionSchedule, playerId
 }
 
 /**
- * Replace Player — Remaining Session mode: the old player's finished-round
- * history is untouched; the new player becomes eligible from the
- * regeneration boundary onward, same as any other AVAILABLE player.
+ * Replace Player (Sprint RT2 Sections 6 & 9) — a direct, position-preserving
+ * swap: every future, non-preserved match slot the old player occupied gets
+ * the new player's id instead; every other match/pairing in the schedule is
+ * left byte-for-byte untouched. No solver call, no regeneration — this is
+ * the top of the priority ladder (Replace → Standby → Regenerate →
+ * Recovery), and it always succeeds once a valid candidate has been chosen
+ * (see utils/replacement-candidates.ts, which the UI already filters
+ * through), because substituting one id for another in the exact slots the
+ * old player already held can never create a double-booking or a court
+ * conflict. `regenerationFailed` is therefore always false for this action.
  */
 async function replacePlayer(
   sessionId: string,
@@ -260,10 +290,29 @@ async function replacePlayer(
   oldPlayerId: string,
   newPlayerId: string,
 ): Promise<RuntimeActionOutcome> {
-  const { players, playerIds, courtCount, nameById } = await loadRuntimeContext(sessionId)
+  const { playerIds, courtCount, nameById } = await loadRuntimeContext(sessionId)
   if (!playerIds.includes(newPlayerId)) {
     throw new Error('replacePlayer: replacement must already be an attendee of this session.')
   }
+
+  const boundary = regenerationBoundary(schedule.matches, courtCount)
+  const newMatches: PlannedMatch[] = schedule.matches.map((match, index) => {
+    if (index < boundary || isPreserved(match)) return match
+
+    const inTeamA = match.teamA.includes(oldPlayerId)
+    const inTeamB = match.teamB.includes(oldPlayerId)
+    if (!inTeamA && !inTeamB) return match
+
+    const swap = (team: readonly [string, string]): readonly [string, string] =>
+      [team[0] === oldPlayerId ? newPlayerId : team[0], team[1] === oldPlayerId ? newPlayerId : team[1]]
+
+    return {
+      ...match,
+      teamA:    inTeamA ? swap(match.teamA) : match.teamA,
+      teamB:    inTeamB ? swap(match.teamB) : match.teamB,
+      modified: true,
+    }
+  })
 
   let newStates = setStatus(schedule, oldPlayerId, {
     playerId: oldPlayerId,
@@ -272,15 +321,17 @@ async function replacePlayer(
   })
   newStates = new Map(newStates).set(newPlayerId, { playerId: newPlayerId, status: 'AVAILABLE' })
 
-  const outcome = regenerateRemaining(schedule, newStates, players, playerIds, courtCount)
-  persistInBackground(sessionId, outcome.schedule)
+  const newQuality = computeQuality(newMatches, playerIds)
+  const updated = nextSchedule(schedule, { matches: newMatches, quality: newQuality, playerStates: newStates })
+  persistInBackground(sessionId, updated)
 
   const round = currentRoundNumber(schedule.matches, courtCount)
   void logEvent(sessionId, 'REPLACE', newPlayerId,
     `${nameById.get(newPlayerId) ?? newPlayerId} replaced ${nameById.get(oldPlayerId) ?? oldPlayerId}` +
     `${round ? ` before Round ${round + 1}` : ''}.`,
     { relatedPlayerId: oldPlayerId })
-  return outcome
+
+  return { schedule: updated, regenerationFailed: false }
 }
 
 async function logEvent(

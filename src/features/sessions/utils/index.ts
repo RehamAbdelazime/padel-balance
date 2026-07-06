@@ -21,4 +21,6 @@ export { friendlyMatchErrorMessage } from './match-errors'
 export { groupMatchesIntoRounds, standbyForRound, deriveRoundStatus } from './schedule-rounds'
 export type { RoundSlot, ScheduleRound, RoundStatus } from './schedule-rounds'
 
+export { getReplacementCandidates } from './replacement-candidates'
+
 export { formatSessionDate, formatSessionTime, toDatetimeLocalValue } from './format-session-date'

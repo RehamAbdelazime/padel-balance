@@ -1,5 +1,5 @@
 import { supabase } from '@/infrastructure/supabase/client'
-import type { SessionAttendee, SessionPlayer } from '../types'
+import type { SessionAttendee, SessionPlayer, Session } from '../types'
 
 /**
  * Attendance service.
@@ -55,6 +55,51 @@ async function getAttendanceForSessions(
   return data
 }
 
+/**
+ * Full attendee rows (with player name/phone) for several sessions in one
+ * query — used by Player History (Sprint H1) to build partner/opponent name
+ * lookups and per-session player counts from a single request, instead of
+ * one `getSessionAttendees` call per attended session.
+ */
+async function getAttendeesForSessions(sessionIds: readonly string[]): Promise<SessionAttendee[]> {
+  if (sessionIds.length === 0) return []
+
+  const { data, error } = await supabase
+    .from('session_players')
+    .select(`
+      id,
+      session_id,
+      player_id,
+      created_at,
+      players (
+        id,
+        name,
+        phone
+      )
+    `)
+    .in('session_id', sessionIds)
+
+  if (error) throw new Error(error.message)
+  return data as unknown as SessionAttendee[]
+}
+
+/**
+ * Every non-archived session a player has ever attended — used by Player
+ * History (Sprint H1) as the seed for session/match/partner/opponent
+ * history. `sessions!inner(...)` makes the archived filter apply to the
+ * joined session row, not the attendance row.
+ */
+async function getSessionsForPlayer(playerId: string): Promise<Session[]> {
+  const { data, error } = await supabase
+    .from('session_players')
+    .select('sessions!inner(*)')
+    .eq('player_id', playerId)
+    .eq('sessions.archived', false)
+
+  if (error) throw new Error(error.message)
+  return (data as unknown as Array<{ sessions: Session }>).map(row => row.sessions)
+}
+
 /** Adds a player to a session. The DB UNIQUE constraint prevents duplicates. */
 async function addPlayer(sessionId: string, playerId: string): Promise<SessionPlayer> {
   const { data, error } = await supabase
@@ -80,6 +125,8 @@ async function removePlayer(sessionPlayerId: string): Promise<void> {
 export const attendanceService = {
   getSessionAttendees,
   getAttendanceForSessions,
+  getAttendeesForSessions,
+  getSessionsForPlayer,
   addPlayer,
   removePlayer,
 } as const

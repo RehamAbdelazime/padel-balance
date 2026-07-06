@@ -1,4 +1,4 @@
-import type { SessionSchedule, PlannedMatch, LiveMatchScore, MatchRuntimeStatus } from '../types'
+import type { SessionSchedule, PlannedMatch, LiveMatchScore } from '../types'
 import { nextSchedule, groupMatchesIntoRounds, deriveRoundStatus } from '../utils'
 import { schedulePersistenceService } from './schedule-persistence.service'
 import { sessionsService } from './sessions.service'
@@ -8,16 +8,24 @@ import { runtimeAuditService } from './runtime-audit.service'
  * match-runtime.service — Live-phase match execution. Deliberately separate
  * from schedule.service (Planning): Planning generates/edits the schedule
  * before the session starts; this service only ever touches score entry and
- * match/round LIVE↔FINISHED/CANCELLED transitions once the session is LIVE.
- * Neither reuses the other's mutation functions, so Planning stays fully
- * immutable once the session has started — this module is the only writer
- * of runtime state (score, matchStatus) from that point on.
+ * match/round PENDING→LIVE→FINISHED/CANCELLED transitions once the session
+ * is LIVE. Neither reuses the other's mutation functions, so Planning stays
+ * fully immutable once the session has started — this module is the only
+ * writer of runtime state (score, matchStatus) from that point on.
  *
  * Round progression is driven entirely by matchStatus (see
  * utils/schedule-rounds.ts `deriveRoundStatus`) — there is no separately
  * stored round status to keep in sync. Session completion is driven the
  * same way: once every round is terminal (FINISHED/CANCELLED), the session
  * itself is automatically finished — no organiser action required.
+ *
+ * Critical Runtime Review: matches no longer auto-transition to LIVE, ever
+ * — not at session start (schedule.service's startMatches), and not when a
+ * round completes. The organiser explicitly starts each PENDING match via
+ * `startMatch`, which is the only place PENDING -> LIVE happens. This is
+ * what makes "the organiser always knows which match is live, which is
+ * next, which is finished" true: nothing changes state without them
+ * pressing something.
  */
 
 function persistInBackground(sessionId: string, schedule: SessionSchedule): void {
@@ -61,36 +69,95 @@ function setLiveScore(
 }
 
 /**
- * If the round containing the just-changed match has become fully terminal
- * (every match FINISHED or CANCELLED), transitions the next round's matches
- * from PENDING to LIVE. Only one round is ever LIVE at a time.
+ * Logs when the round containing `changedMatchId` has just become fully
+ * terminal (every match FINISHED or CANCELLED) — purely an audit-trail
+ * entry. Does NOT touch any other match's status: the next round's matches
+ * stay PENDING, exactly as they already were, and immediately expose Start
+ * Match (any PENDING match does — see startMatch's round-order check,
+ * which is what actually gates "the next round becomes available").
  */
-function advanceRoundIfComplete(
+function logRoundCompletionIfNeeded(
   matches: readonly PlannedMatch[],
   courtCount: number,
   sessionId: string,
-): PlannedMatch[] {
+  changedMatchId: string,
+): void {
   const rounds = groupMatchesIntoRounds(matches, courtCount)
-  const liveRoundIndex = rounds.findIndex(r => deriveRoundStatus(r) === 'LIVE')
-  if (liveRoundIndex === -1) return [...matches]
+  const round = rounds.find(r => r.slots.some(s => s.match.id === changedMatchId))
+  if (!round) return
 
-  const liveRound = rounds[liveRoundIndex]!
-  const liveRoundStatus = deriveRoundStatus(liveRound)
-  if (liveRoundStatus !== 'FINISHED' && liveRoundStatus !== 'CANCELLED') return [...matches]
+  const status = deriveRoundStatus(round)
+  if (status !== 'FINISHED' && status !== 'CANCELLED') return
 
-  logEvent(sessionId, 'ROUND_FINISHED', `Round ${liveRound.roundNumber} finished.`, { roundNumber: liveRound.roundNumber })
+  logEvent(sessionId, 'ROUND_FINISHED', `Round ${round.roundNumber} finished.`, { roundNumber: round.roundNumber })
+}
 
-  const nextRound = rounds[liveRoundIndex + 1]
-  if (!nextRound) return [...matches]
+/**
+ * Start Match (Critical Runtime Review) — the only place a match ever
+ * transitions PENDING -> LIVE. Enforces every validation rule a live
+ * tournament controller needs:
+ *   - the match must actually be PENDING (never re-starts a LIVE/FINISHED/
+ *     CANCELLED match);
+ *   - every earlier round must already be fully terminal — this is what
+ *     makes "the next round becomes available" mean something concrete,
+ *     rather than every PENDING match everywhere being startable at once;
+ *   - no other LIVE match may already be using the same court;
+ *   - none of this match's 4 players may already be live in another match
+ *     (can happen across courts within the same round with some formats).
+ */
+function startMatch(
+  schedule: SessionSchedule,
+  matchId: string,
+  courtCount: number,
+): SessionSchedule {
+  const idx = schedule.matches.findIndex(m => m.id === matchId)
+  if (idx === -1) throw new Error(`startMatch: match ${matchId} not found.`)
+  const match = schedule.matches[idx]!
+  if (match.matchStatus !== 'PENDING') {
+    throw new Error(`startMatch: match ${matchId} is not Pending.`)
+  }
 
-  logEvent(sessionId, 'ROUND_STARTED', `Round ${nextRound.roundNumber} started.`, { roundNumber: nextRound.roundNumber })
+  const rounds = groupMatchesIntoRounds(schedule.matches, courtCount)
+  const matchRound = rounds.find(r => r.slots.some(s => s.match.id === matchId))
+  if (matchRound) {
+    const earlierRoundsTerminal = rounds
+      .filter(r => r.roundNumber < matchRound.roundNumber)
+      .every(r => {
+        const status = deriveRoundStatus(r)
+        return status === 'FINISHED' || status === 'CANCELLED'
+      })
+    if (!earlierRoundsTerminal) {
+      throw new Error('startMatch: an earlier round has not finished yet.')
+    }
+  }
 
-  const nextRoundMatchIds = new Set(nextRound.slots.map(s => s.match.id))
-  return matches.map(m => {
-    if (!nextRoundMatchIds.has(m.id)) return m
-    const matchStatus: MatchRuntimeStatus = 'LIVE'
-    return { ...m, matchStatus }
-  })
+  if (match.courtNumber !== null) {
+    const courtConflict = schedule.matches.some(
+      m => m.id !== matchId && m.courtNumber === match.courtNumber && m.matchStatus === 'LIVE',
+    )
+    if (courtConflict) {
+      throw new Error('startMatch: another match is already live on this court.')
+    }
+  }
+
+  const thisMatchPlayers = [...match.teamA, ...match.teamB]
+  const playerConflict = schedule.matches.some(
+    m => m.id !== matchId && m.matchStatus === 'LIVE'
+      && [...m.teamA, ...m.teamB].some(playerId => thisMatchPlayers.includes(playerId)),
+  )
+  if (playerConflict) {
+    throw new Error('startMatch: a player in this match is already live in another match.')
+  }
+
+  const liveMatch: PlannedMatch = { ...match, matchStatus: 'LIVE' }
+  const newMatches = schedule.matches.map((m, i) => (i === idx ? liveMatch : m))
+  const updated = nextSchedule(schedule, { matches: newMatches })
+  persistInBackground(schedule.sessionId, updated)
+
+  logEvent(schedule.sessionId, 'ROUND_STARTED', `Match started${match.courtNumber !== null ? ` on Court ${match.courtNumber}` : ''}.`,
+    matchRound ? { roundNumber: matchRound.roundNumber } : undefined)
+
+  return updated
 }
 
 /** Once every round is terminal (FINISHED/CANCELLED), the session finishes itself — no organiser action required. */
@@ -148,12 +215,12 @@ function finishMatch(
   }
 
   const withFinishedMatch = schedule.matches.map((m, i) => (i === idx ? finishedMatch : m))
-  const newMatches        = advanceRoundIfComplete(withFinishedMatch, courtCount, schedule.sessionId)
-  const updated           = nextSchedule(schedule, { matches: newMatches })
+  const updated           = nextSchedule(schedule, { matches: withFinishedMatch })
   persistInBackground(schedule.sessionId, updated)
 
   logEvent(schedule.sessionId, 'MATCH_FINISHED', `Match finished: ${team1}–${team2}.`)
-  finishSessionIfComplete(newMatches, courtCount, schedule.sessionId)
+  logRoundCompletionIfNeeded(withFinishedMatch, courtCount, schedule.sessionId, matchId)
+  finishSessionIfComplete(withFinishedMatch, courtCount, schedule.sessionId)
 
   return updated
 }
@@ -161,8 +228,9 @@ function finishMatch(
 /**
  * Cancels a match (LIVE or PENDING — a FINISHED match can never be
  * cancelled). Counts as terminal for round-completion purposes, so
- * cancelling the last open match in a round can advance to the next round
- * or finish the session exactly like Finish Match does.
+ * cancelling the last open match in a round can complete it (and expose
+ * the next round's Start Match) or finish the session exactly like Finish
+ * Match does.
  */
 function cancelMatch(
   schedule: SessionSchedule,
@@ -178,17 +246,18 @@ function cancelMatch(
 
   const cancelledMatch: PlannedMatch = { ...match, matchStatus: 'CANCELLED' }
   const withCancelledMatch = schedule.matches.map((m, i) => (i === idx ? cancelledMatch : m))
-  const newMatches         = advanceRoundIfComplete(withCancelledMatch, courtCount, schedule.sessionId)
-  const updated            = nextSchedule(schedule, { matches: newMatches })
+  const updated            = nextSchedule(schedule, { matches: withCancelledMatch })
   persistInBackground(schedule.sessionId, updated)
 
   logEvent(schedule.sessionId, 'MATCH_CANCELLED', 'Match cancelled.')
-  finishSessionIfComplete(newMatches, courtCount, schedule.sessionId)
+  logRoundCompletionIfNeeded(withCancelledMatch, courtCount, schedule.sessionId, matchId)
+  finishSessionIfComplete(withCancelledMatch, courtCount, schedule.sessionId)
 
   return updated
 }
 
 export const matchRuntimeService = {
+  startMatch,
   setLiveScore,
   finishMatch,
   cancelMatch,

@@ -211,12 +211,16 @@ export function useSchedule(sessionId: string) {
      */
     startMatches: (courtCount?: number) => runSync(s => scheduleService.startMatches(s, courtCount)),
 
-    // ── Live runtime operations (Sprint F25) ───────────────────────────────────
+    // ── Live runtime operations ─────────────────────────────────────────────────
+    /** Starts a Pending match (Critical Runtime Review) — validates round order, court conflicts, and player conflicts. */
+    startMatch: (matchId: string, courtCount: number) =>
+      runSync(s => matchRuntimeService.startMatch(s, matchId, courtCount), true),
+
     /** Autosaves an in-progress score for a LIVE match. Either side may be null. */
     setLiveScore: (matchId: string, score: LiveMatchScore) =>
       runSync(s => matchRuntimeService.setLiveScore(s, matchId, score)),
 
-    /** Validates, locks the score, marks the match FINISHED, and auto-advances the round if it just completed. */
+    /** Validates, locks the score, marks the match FINISHED. Does not auto-start the next round — the organiser starts each match explicitly. */
     finishMatch: (matchId: string, courtCount: number) =>
       runSync(s => matchRuntimeService.finishMatch(s, matchId, courtCount), true),
 

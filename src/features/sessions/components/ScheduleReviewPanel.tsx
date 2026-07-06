@@ -61,6 +61,8 @@ interface Props {
   onUnlockMatch:           (matchId: string) => void
   onRemoveMatch:           (matchId: string) => void
   onSwapPlayer:            (matchId: string, fromPlayerId: string, toPlayerId: string) => void
+  /** Present only once the session is LIVE — starts a Pending match. */
+  onStartMatch?:           (matchId: string) => void
   /** Present only once the session is LIVE — autosaves an in-progress score for a LIVE match. */
   onScoreChange?:          (matchId: string, score: LiveMatchScore) => void
   /** Present only once the session is LIVE — finalizes a LIVE match's score. */
@@ -84,6 +86,7 @@ export function ScheduleReviewPanel({
   onUnlockMatch,
   onRemoveMatch,
   onSwapPlayer,
+  onStartMatch,
   onScoreChange,
   onFinishMatch,
   onCancelMatch,
@@ -218,7 +221,17 @@ export function ScheduleReviewPanel({
           inserted around the existing cards. */}
       {hasMatches ? (
         <div className="space-y-6">
-          {rounds.map(round => (
+          {rounds.map((round, roundIndex) => {
+            // Sprint: Critical Runtime Review — a round's matches are only
+            // startable once every earlier round is fully terminal. Computed
+            // once per round here (not inside PlannedMatchCard) since it
+            // needs the full round list, not just one match.
+            const canStartThisRound = rounds.slice(0, roundIndex).every(r => {
+              const status = deriveRoundStatus(r)
+              return status === 'FINISHED' || status === 'CANCELLED'
+            })
+
+            return (
             <div key={round.roundNumber} className="space-y-3">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold">
                 {t('sessions.schedule.round.title', { n: round.roundNumber })}
@@ -253,6 +266,8 @@ export function ScheduleReviewPanel({
                     onUnlock={isPlanning ? onUnlockMatch : undefined}
                     onRemove={isPlanning ? () => setRemoveMatchId(slot.match.id) : undefined}
                     onSwapPlayer={isPlanning ? () => setSwapMatch(slot.match) : undefined}
+                    onStartMatch={onStartMatch}
+                    canStart={canStartThisRound}
                     disabled={isLoading}
                   />
                 )
@@ -264,7 +279,8 @@ export function ScheduleReviewPanel({
                 </p>
               )}
             </div>
-          ))}
+            )
+          })}
         </div>
       ) : (
         !isLoading && (

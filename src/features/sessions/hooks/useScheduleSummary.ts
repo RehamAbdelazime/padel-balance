@@ -2,11 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import { schedulePersistenceService } from '../services/schedule-persistence.service'
 
 /**
- * Read-only schedule summary queries — used by the Dashboard and by Session
- * Reports. Distinct from useSchedule.ts, which owns full runtime
- * state/mutations for one session's live workspace; these are lightweight,
- * cache-friendly reads with no mutation surface, safe for a read-only
- * consumer like a report to depend on.
+ * Read-only schedule summary queries — used by the Dashboard, Session
+ * Reports, and Player History. Distinct from useSchedule.ts, which owns
+ * full runtime state/mutations for one session's live workspace; these are
+ * lightweight, cache-friendly reads with no mutation surface, safe for a
+ * read-only consumer to depend on.
  */
 
 /**
@@ -33,5 +33,20 @@ export function useSessionScheduleQuery(sessionId: string | undefined) {
     queryKey: ['sessions', sessionId, 'scheduleSummary'] as const,
     queryFn: () => schedulePersistenceService.loadSchedule(sessionId!),
     enabled: Boolean(sessionId),
+  })
+}
+
+/**
+ * Every attended session's matches + format in one request (2 queries
+ * total, see schedule-persistence.service's getMatchesForSessions) — the
+ * core data source for Player History (Sprint H1), instead of one
+ * useSessionScheduleQuery per attended session.
+ */
+export function useMatchesForSessionsQuery(sessionIds: readonly string[]) {
+  const key = [...sessionIds].sort()
+  return useQuery({
+    queryKey: ['sessions', 'matchesForSessions', key] as const,
+    queryFn: () => schedulePersistenceService.getMatchesForSessions(key),
+    enabled: key.length > 0,
   })
 }
