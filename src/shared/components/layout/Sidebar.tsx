@@ -24,9 +24,9 @@ const NAV_ITEMS: readonly NavItem[] = [
   { to: '/', icon: LayoutDashboard, labelKey: 'nav.dashboard', end: true },
   { to: '/players', icon: Users, labelKey: 'nav.players', end: false },
   { to: '/sessions', icon: CalendarDays, labelKey: 'nav.sessions', end: false },
-  { to: '/matches', icon: Trophy, labelKey: 'nav.matches', end: false },
-  { to: '/ratings', icon: Star, labelKey: 'nav.ratings', end: false },
-  { to: '/reports', icon: FileText, labelKey: 'nav.reports', end: false },
+  // { to: '/matches', icon: Trophy, labelKey: 'nav.matches', end: false },
+  // { to: '/ratings', icon: Star, labelKey: 'nav.ratings', end: false },
+  // { to: '/reports', icon: FileText, labelKey: 'nav.reports', end: false },
 ]
 
 export function Sidebar() {
