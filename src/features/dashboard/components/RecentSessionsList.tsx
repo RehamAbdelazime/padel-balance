@@ -14,12 +14,11 @@ interface RecentSessionsListProps {
 }
 
 /**
- * Section 5 — last completed sessions. "Open Report" links to the existing
- * Session Details page (its match history), the real place this data lives —
- * there is no separate Reports page in this app yet, so a "winner" column
- * is intentionally omitted: every built-in format rotates partners match by
- * match, so a session has no single winning team/player, only per-match
- * results already visible on that session's own page.
+ * Section 5 — last completed sessions. "Open Report" now links to the real
+ * Session Report page (Sprint R2). A "winner" column is intentionally
+ * omitted: every built-in format rotates partners match by match, so a
+ * session has no single winning team/player — only per-match results,
+ * which the report itself shows in full.
  */
 export function RecentSessionsList({ sessions, attendanceCountBySession, formatIdsBySession }: RecentSessionsListProps) {
   const { t, i18n } = useTranslation()
@@ -53,7 +52,7 @@ export function RecentSessionsList({ sessions, attendanceCountBySession, formatI
                       <span>{t('dashboard.recent.players_other', { count: playerCount })}</span>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => void navigate(`/sessions/${session.id}`)}>
+                  <Button variant="outline" size="sm" onClick={() => void navigate(`/sessions/${session.id}/report`)}>
                     {t('dashboard.recent.openReport')}
                   </Button>
                 </li>

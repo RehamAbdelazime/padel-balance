@@ -1,6 +1,6 @@
 import { useSessionsQuery } from '@/features/sessions/hooks/useSessions'
 import { useSessionAttendanceQuery, useAttendanceForSessionsQuery } from '@/features/sessions/hooks/useAttendance'
-import { useFormatIdsForSessionsQuery, useLiveScheduleQuery } from '@/features/sessions/hooks/useScheduleSummary'
+import { useFormatIdsForSessionsQuery, useSessionScheduleQuery } from '@/features/sessions/hooks/useScheduleSummary'
 import { usePlayersQuery, useArchivedPlayerCountQuery } from '@/features/players/hooks/usePlayers'
 import type { Session } from '@/features/sessions/types'
 import { UPCOMING_SESSIONS_LIMIT, RECENT_SESSIONS_LIMIT } from '../constants'
@@ -52,7 +52,7 @@ export function useDashboard() {
   const attendanceQuery     = useAttendanceForSessionsQuery(relevantSessionIds)
   const formatIdsQuery      = useFormatIdsForSessionsQuery(relevantSessionIds)
   const liveAttendanceQuery = useSessionAttendanceQuery(liveSession?.id ?? '')
-  const liveScheduleQuery   = useLiveScheduleQuery(liveSession?.id)
+  const liveScheduleQuery   = useSessionScheduleQuery(liveSession?.id)
 
   const attendanceCountBySession = new Map<string, number>()
   for (const row of attendanceQuery.data ?? []) {

@@ -5,6 +5,7 @@ import { PlayersPage } from '@/features/players/pages/PlayersPage'
 import { PlayerProfilePage } from '@/features/players/pages/PlayerProfilePage'
 import { SessionsPage } from '@/features/sessions/pages/SessionsPage'
 import { SessionDetailPage } from '@/features/sessions/pages/SessionDetailPage'
+import { SessionReportPage } from '@/features/reports/pages/SessionReportPage'
 
 /**
  * Application route table.
@@ -37,6 +38,10 @@ export const router = createBrowserRouter([
       {
         path: 'sessions/:sessionId',
         element: <SessionDetailPage />,
+      },
+      {
+        path: 'sessions/:sessionId/report',
+        element: <SessionReportPage />,
       },
     ],
   },

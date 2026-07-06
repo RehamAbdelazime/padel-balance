@@ -13,8 +13,8 @@ import { playerRuntimeService } from '../services/player-runtime.service'
 import type { SessionAttendee, PlannedMatch, PlayerRuntimeState, PlayerRuntimeStatus } from '../types'
 import type { Player } from '@/features/players/types'
 
-/** Only the non-AVAILABLE states are ever shown as a badge. */
-function runtimeStatusLabel(t: TFunction, status: PlayerRuntimeStatus): string {
+/** Only the non-AVAILABLE states are ever shown as a badge. Exported for reuse by Session Reports (Sprint R2). */
+export function runtimeStatusLabel(t: TFunction, status: PlayerRuntimeStatus): string {
   switch (status) {
     case 'RESTING':  return t('sessions.runtime.status.resting')
     case 'ABSENT':   return t('sessions.runtime.status.absent')
