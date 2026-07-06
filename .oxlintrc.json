@@ -1,0 +1,9 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/npm/oxlint@latest/configuration_schema.json",
+  "rules": {
+    "react/only-export-components": [
+      "warn",
+      { "allowConstantExport": true }
+    ]
+  }
+}
