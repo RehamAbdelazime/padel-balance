@@ -1,8 +1,8 @@
-# Padel Balance — Architecture Reference
+# PadelOps — Architecture Reference
 
 ## Project Overview
 
-Padel Balance is a Live Padel Session Manager. It helps organisers plan, run, and record padel sessions by generating balanced team matchups based on player ratings.
+PadelOps is a Live Padel Session Manager. It helps organisers plan, run, and record padel sessions by generating balanced team matchups based on player ratings.
 
 **Stack:** React 19 · TypeScript · Vite · Tailwind · shadcn/ui · Supabase · TanStack Query v5 · Zustand · React Hook Form · Zod
 

@@ -39,7 +39,7 @@ void i18n
     detection: {
       order: ['localStorage', 'navigator'],
       caches: ['localStorage'],
-      lookupLocalStorage: 'padel-balance-lang',
+      lookupLocalStorage: 'padel-ops-lang',
     },
   })
 

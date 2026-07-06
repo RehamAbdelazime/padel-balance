@@ -1,4 +1,4 @@
-# Claude Code — Padel Balance Development Instructions
+# Claude Code — PadelOps Development Instructions
 
 ## Project Philosophy
 

@@ -6,14 +6,14 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl) {
   throw new Error(
-    '[PadelBalance] VITE_SUPABASE_URL is not defined. ' +
+    '[PadelOps] VITE_SUPABASE_URL is not defined. ' +
       'Copy .env.example to .env and fill in your Supabase project credentials.',
   )
 }
 
 if (!supabaseAnonKey) {
   throw new Error(
-    '[PadelBalance] VITE_SUPABASE_ANON_KEY is not defined. ' +
+    '[PadelOps] VITE_SUPABASE_ANON_KEY is not defined. ' +
       'Copy .env.example to .env and fill in your Supabase project credentials.',
   )
 }

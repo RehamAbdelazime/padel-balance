@@ -13,7 +13,7 @@ const rootElement = document.getElementById('root')
 
 if (!rootElement) {
   throw new Error(
-    '[PadelBalance] Root element #root not found in index.html. ' +
+    '[PadelOps] Root element #root not found in index.html. ' +
       'Ensure <div id="root"></div> exists in the document body.',
   )
 }

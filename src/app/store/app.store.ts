@@ -10,7 +10,7 @@ interface AppState {
 /**
  * Application-level UI state store.
  *
- * Persisted to localStorage under the `padel-balance-app` key so that
+ * Persisted to localStorage under the `padel-ops-app` key so that
  * user preferences survive page reloads.
  *
  * Feature-specific state lives in each feature's own store, not here.
@@ -27,7 +27,7 @@ export const useAppStore = create<AppState>()(
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
     }),
     {
-      name: 'padel-balance-app',
+      name: 'padel-ops-app',
       partialize: (state) => ({ sidebarCollapsed: state.sidebarCollapsed }),
     },
   ),
