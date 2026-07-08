@@ -4,38 +4,56 @@ import { toast } from 'sonner'
 import { playersService } from '../services/players.service'
 import { ratingService } from '@/features/rating'
 import { friendlyPlayerErrorMessage } from '../utils/player-errors'
+import { useCurrentGroupStore } from '@/app/store/current-group.store'
 import type { CreatePlayerInput, UpdatePlayerInput } from '../types'
 import type { RatingState } from '@/features/rating'
 
 // ── Query key factory ─────────────────────────────────────────────────────────
 
 export const playerQueryKeys = {
-  /** ['players'] — invalidates every player query */
-  all: () => ['players'] as const,
-  /** ['players', id] — scoped to one player */
-  detail: (id: string) => ['players', id] as const,
-  /** ['players', id, 'rating'] — scoped to one player's rating */
-  rating: (id: string) => ['players', id, 'rating'] as const,
-  /** ['players', 'archivedCount'] — Dashboard's Players Overview only */
-  archivedCount: () => ['players', 'archivedCount'] as const,
+  /** ['players', groupId] — invalidates every player query for a group */
+  all: (groupId: string | null) => ['players', groupId] as const,
+  /** ['players', groupId, id] — scoped to one player */
+  detail: (groupId: string | null, id: string) => ['players', groupId, id] as const,
+  /** ['players', groupId, id, 'rating'] — scoped to one player's rating */
+  rating: (groupId: string | null, id: string) => ['players', groupId, id, 'rating'] as const,
+  /** ['players', groupId, 'archivedCount'] — Dashboard's Players Overview only */
+  archivedCount: (groupId: string | null) => ['players', groupId, 'archivedCount'] as const,
 } as const
+
+const NO_CURRENT_GROUP_ERROR = 'No current group selected'
 
 // ── Read hooks ────────────────────────────────────────────────────────────────
 
-/** Returns all non-archived players, ordered by name. */
+/** Returns all non-archived players, ordered by name, for the current group. */
 export function usePlayersQuery() {
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
+
   return useQuery({
-    queryKey: playerQueryKeys.all(),
-    queryFn: playersService.getAll,
+    queryKey: playerQueryKeys.all(currentGroupId),
+    queryFn: () => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return playersService.getAll(currentGroupId)
+    },
+    enabled: Boolean(currentGroupId),
   })
 }
 
-/** Returns a single player by ID (includes archived). */
+/** Returns a single player by ID (includes archived) within the current group. */
 export function usePlayerQuery(id: string) {
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
+
   return useQuery({
-    queryKey: playerQueryKeys.detail(id),
-    queryFn: () => playersService.getById(id),
-    enabled: Boolean(id),
+    queryKey: playerQueryKeys.detail(currentGroupId, id),
+    queryFn: () => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return playersService.getById(currentGroupId, id)
+    },
+    enabled: Boolean(currentGroupId) && Boolean(id),
   })
 }
 
@@ -55,18 +73,28 @@ export function usePlayerQuery(id: string) {
  * The rating feature has no knowledge of the players feature.
  */
 export function usePlayerRatingQuery(playerId: string) {
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
+
   return useQuery({
-    queryKey: playerQueryKeys.rating(playerId),
+    queryKey: playerQueryKeys.rating(currentGroupId, playerId),
     queryFn: (): RatingState => ratingService.getPlayerRating(playerId),
-    enabled: Boolean(playerId),
+    enabled: Boolean(currentGroupId) && Boolean(playerId),
   })
 }
 
-/** Count of archived players — Dashboard's Players Overview only (avoids fetching full archived rows). */
+/** Count of archived players in the current group — Dashboard's Players Overview only. */
 export function useArchivedPlayerCountQuery() {
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
+
   return useQuery({
-    queryKey: playerQueryKeys.archivedCount(),
-    queryFn: playersService.getArchivedCount,
+    queryKey: playerQueryKeys.archivedCount(currentGroupId),
+    queryFn: () => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return playersService.getArchivedCount(currentGroupId)
+    },
+    enabled: Boolean(currentGroupId),
   })
 }
 
@@ -79,11 +107,17 @@ export function useArchivedPlayerCountQuery() {
 export function useCreatePlayerMutation() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
 
   return useMutation({
-    mutationFn: (input: CreatePlayerInput) => playersService.create(input),
+    mutationFn: (input: CreatePlayerInput) => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return playersService.create(currentGroupId, input)
+    },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: playerQueryKeys.all() })
+      await queryClient.invalidateQueries({ queryKey: playerQueryKeys.all(currentGroupId) })
       toast.success(t('players.toasts.created'))
     },
     onError: (error: Error) => {
@@ -96,13 +130,18 @@ export function useCreatePlayerMutation() {
 export function useUpdatePlayerMutation() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
 
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: UpdatePlayerInput }) =>
-      playersService.update(id, input),
+    mutationFn: ({ id, input }: { id: string; input: UpdatePlayerInput }) => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return playersService.update(currentGroupId, id, input)
+    },
     onSuccess: async (_data, { id }) => {
-      await queryClient.invalidateQueries({ queryKey: playerQueryKeys.all() })
-      await queryClient.invalidateQueries({ queryKey: playerQueryKeys.detail(id) })
+      await queryClient.invalidateQueries({ queryKey: playerQueryKeys.all(currentGroupId) })
+      await queryClient.invalidateQueries({ queryKey: playerQueryKeys.detail(currentGroupId, id) })
       toast.success(t('players.toasts.updated'))
     },
     onError: (error: Error) => {
@@ -118,12 +157,18 @@ export function useUpdatePlayerMutation() {
 export function useArchivePlayerMutation() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
 
   return useMutation({
-    mutationFn: (id: string) => playersService.archive(id),
+    mutationFn: (id: string) => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return playersService.archive(currentGroupId, id)
+    },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: playerQueryKeys.all() })
-      await queryClient.invalidateQueries({ queryKey: playerQueryKeys.archivedCount() })
+      await queryClient.invalidateQueries({ queryKey: playerQueryKeys.all(currentGroupId) })
+      await queryClient.invalidateQueries({ queryKey: playerQueryKeys.archivedCount(currentGroupId) })
       toast.success(t('players.toasts.archived'))
     },
     onError: (error: Error) => {

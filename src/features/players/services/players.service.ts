@@ -14,10 +14,11 @@ import type { Player, CreatePlayerInput, UpdatePlayerInput } from '../types'
  * preserving history for sessions, matches, and statistics.
  */
 
-async function getAll(): Promise<Player[]> {
+async function getAll(groupId: string): Promise<Player[]> {
   const { data, error } = await supabase
     .from('players')
     .select('*')
+    .eq('group_id', groupId)
     .eq('archived', false)
     .order('name', { ascending: true })
 
@@ -26,20 +27,22 @@ async function getAll(): Promise<Player[]> {
 }
 
 /** Count-only query (no rows fetched) — used by the Dashboard's Players Overview. */
-async function getArchivedCount(): Promise<number> {
+async function getArchivedCount(groupId: string): Promise<number> {
   const { count, error } = await supabase
     .from('players')
     .select('*', { count: 'exact', head: true })
+    .eq('group_id', groupId)
     .eq('archived', true)
 
   if (error) throw new Error(error.message)
   return count ?? 0
 }
 
-async function getById(id: string): Promise<Player> {
+async function getById(groupId: string, id: string): Promise<Player> {
   const { data, error } = await supabase
     .from('players')
     .select('*')
+    .eq('group_id', groupId)
     .eq('id', id)
     .single()
 
@@ -47,10 +50,10 @@ async function getById(id: string): Promise<Player> {
   return data
 }
 
-async function create(input: CreatePlayerInput): Promise<Player> {
+async function create(groupId: string, input: CreatePlayerInput): Promise<Player> {
   const { data, error } = await supabase
     .from('players')
-    .insert(input)
+    .insert({ ...input, group_id: groupId })
     .select()
     .single()
 
@@ -58,10 +61,11 @@ async function create(input: CreatePlayerInput): Promise<Player> {
   return data
 }
 
-async function update(id: string, input: UpdatePlayerInput): Promise<Player> {
+async function update(groupId: string, id: string, input: UpdatePlayerInput): Promise<Player> {
   const { data, error } = await supabase
     .from('players')
     .update(input)
+    .eq('group_id', groupId)
     .eq('id', id)
     .select()
     .single()
@@ -71,10 +75,11 @@ async function update(id: string, input: UpdatePlayerInput): Promise<Player> {
 }
 
 /** Sets `archived = true`. The row is retained; no hard delete is performed. */
-async function archive(id: string): Promise<void> {
+async function archive(groupId: string, id: string): Promise<void> {
   const { error } = await supabase
     .from('players')
     .update({ archived: true })
+    .eq('group_id', groupId)
     .eq('id', id)
 
   if (error) throw new Error(error.message)
