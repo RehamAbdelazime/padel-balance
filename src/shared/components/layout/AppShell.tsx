@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { RefreshCw } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
-
+import { MobileBottomNav } from './MobileBottomNav'
 /**
  * Application shell layout.
  *
@@ -31,7 +31,7 @@ export function AppShell() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background print:h-auto print:overflow-visible">
-      <div className="print:hidden">
+      <div className="hidden md:block print:hidden">
         <Sidebar />
       </div>
 
@@ -40,7 +40,7 @@ export function AppShell() {
           <Header />
         </div>
 
-        <main className="flex-1 overflow-auto p-6 print:overflow-visible print:p-0">
+        <main className="flex-1 overflow-auto p-4 pb-24 md:p-6 md:pb-6 print:overflow-visible print:p-0">
           <Suspense
             fallback={
               <div className="flex items-center justify-center py-20">
@@ -55,6 +55,9 @@ export function AppShell() {
 
       <div className="print:hidden">
         <Toaster position="top-right" richColors closeButton />
+      </div>
+      <div className="print:hidden">
+        <MobileBottomNav />
       </div>
     </div>
   )
