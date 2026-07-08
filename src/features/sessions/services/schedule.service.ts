@@ -45,9 +45,9 @@ interface LoadedPlayers {
   players:   GeneratorPlayer[]
 }
 
-async function loadPlayers(sessionId: string): Promise<LoadedPlayers> {
+async function loadPlayers(groupId: string, sessionId: string): Promise<LoadedPlayers> {
   const session    = await sessionsService.getById(sessionId)
-  const attendees  = await attendanceService.getSessionAttendees(sessionId)
+  const attendees  = await attendanceService.getSessionAttendees(groupId, sessionId)
   const playerIds  = attendees.map(a => a.player_id)
   const players: GeneratorPlayer[] = playerIds.map(id => ({ id }))
 
@@ -60,9 +60,10 @@ async function loadPlayers(sessionId: string): Promise<LoadedPlayers> {
  * can size the plan correctly without a second Supabase round-trip.
  */
 async function buildGeneratorContext(
+  groupId: string,
   sessionId: string,
 ): Promise<{ context: GeneratorContext; courtCount: number }> {
-  const { session, playerIds, players } = await loadPlayers(sessionId)
+  const { session, playerIds, players } = await loadPlayers(groupId, sessionId)
   return {
     context:    { sessionId, playerIds, players },
     courtCount: session.court_count,
@@ -116,6 +117,7 @@ async function loadSchedule(sessionId: string): Promise<PersistedSchedule | null
 // ── Public API — schedule creation ────────────────────────────────────────────
 
 async function createSchedule(
+  groupId: string,
   sessionId: string,
   targetCount: number,
   // Deferred by design: organiser overrides beyond match count (e.g. custom
@@ -126,7 +128,7 @@ async function createSchedule(
   _baseConfig: GeneratorConfig = {},
 ): Promise<SessionSchedule> {
   const generator = getGenerator('custom')
-  const { context, courtCount } = await buildGeneratorContext(sessionId)
+  const { context, courtCount } = await buildGeneratorContext(groupId, sessionId)
   const plan       = buildCustomPlan(context.playerIds.length, targetCount, courtCount)
   const schedule   = unwrapSchedule(await generator.generate(plan, context))
   await schedulePersistenceService.saveSchedule(sessionId, schedule, generator.formatId)
@@ -276,13 +278,14 @@ function setPlayerStatus(
 // ── Public API — regeneration operations (async) ──────────────────────────────
 
 async function regenerateCurrentMatch(
+  groupId: string,
   schedule: SessionSchedule,
   sessionId: string,
   // Deferred by design — see createSchedule's identical note above.
   _baseConfig: GeneratorConfig = {},
 ): Promise<SessionSchedule> {
   const generator = getGenerator('custom')
-  const { context, courtCount } = await buildGeneratorContext(sessionId)
+  const { context, courtCount } = await buildGeneratorContext(groupId, sessionId)
   const plan       = buildCustomPlan(context.playerIds.length, schedule.targetCount, courtCount)
   const updated    = unwrapSchedule(await generator.regenerate(schedule, plan, context, 'current'))
   await schedulePersistenceService.saveSchedule(sessionId, updated)
@@ -290,12 +293,13 @@ async function regenerateCurrentMatch(
 }
 
 async function regenerateRemainingMatches(
+  groupId: string,
   schedule: SessionSchedule,
   sessionId: string,
   _baseConfig: GeneratorConfig = {},
 ): Promise<SessionSchedule> {
   const generator = getGenerator('custom')
-  const { context, courtCount } = await buildGeneratorContext(sessionId)
+  const { context, courtCount } = await buildGeneratorContext(groupId, sessionId)
   const plan       = buildCustomPlan(context.playerIds.length, schedule.targetCount, courtCount)
   const updated    = unwrapSchedule(await generator.regenerate(schedule, plan, context, 'remaining'))
   await schedulePersistenceService.saveSchedule(sessionId, updated)
@@ -303,12 +307,13 @@ async function regenerateRemainingMatches(
 }
 
 async function regenerateEntireSchedule(
+  groupId: string,
   schedule: SessionSchedule,
   sessionId: string,
   _baseConfig: GeneratorConfig = {},
 ): Promise<SessionSchedule> {
   const generator = getGenerator('custom')
-  const { context, courtCount } = await buildGeneratorContext(sessionId)
+  const { context, courtCount } = await buildGeneratorContext(groupId, sessionId)
   const plan       = buildCustomPlan(context.playerIds.length, schedule.targetCount, courtCount)
   const updated    = unwrapSchedule(await generator.regenerate(schedule, plan, context, 'all'))
   await schedulePersistenceService.saveSchedule(sessionId, updated)
@@ -316,11 +321,12 @@ async function regenerateEntireSchedule(
 }
 
 async function recalculateBalanceOnly(
+  groupId: string,
   schedule: SessionSchedule,
   sessionId: string,
 ): Promise<SessionSchedule> {
   const generator = getGenerator('custom')
-  const { context, courtCount } = await buildGeneratorContext(sessionId)
+  const { context, courtCount } = await buildGeneratorContext(groupId, sessionId)
   const plan       = buildCustomPlan(context.playerIds.length, schedule.targetCount, courtCount)
   const updated    = unwrapSchedule(await generator.regenerate(schedule, plan, context, 'recalculate-only'))
   await schedulePersistenceService.saveSchedule(sessionId, updated)

@@ -4,13 +4,23 @@ import { toast } from 'sonner'
 import { attendanceService } from '../services/attendance.service'
 import { sessionQueryKeys } from './useSessions'
 import { friendlyAttendanceErrorMessage } from '../utils'
+import { useCurrentGroupStore } from '@/app/store/current-group.store'
+
+const NO_CURRENT_GROUP_ERROR = 'No current group selected'
 
 /** Returns all attendees for a session with player details. */
 export function useSessionAttendanceQuery(sessionId: string) {
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
+
   return useQuery({
     queryKey: sessionQueryKeys.attendance(sessionId),
-    queryFn: () => attendanceService.getSessionAttendees(sessionId),
-    enabled: Boolean(sessionId),
+    queryFn: () => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return attendanceService.getSessionAttendees(currentGroupId, sessionId)
+    },
+    enabled: Boolean(currentGroupId) && Boolean(sessionId),
   })
 }
 
@@ -20,30 +30,49 @@ export function useSessionAttendanceQuery(sessionId: string) {
  * set of ids (in any order) reuses the same cache entry.
  */
 export function useAttendanceForSessionsQuery(sessionIds: readonly string[]) {
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
   const key = [...sessionIds].sort()
   return useQuery({
     queryKey: ['sessions', 'attendanceForSessions', key] as const,
-    queryFn: () => attendanceService.getAttendanceForSessions(key),
-    enabled: key.length > 0,
+    queryFn: () => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return attendanceService.getAttendanceForSessions(currentGroupId, key)
+    },
+    enabled: Boolean(currentGroupId) && key.length > 0,
   })
 }
 
 /** Full attendee rows (with names) for several sessions in one request — Player History only. */
 export function useAttendeesForSessionsQuery(sessionIds: readonly string[]) {
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
   const key = [...sessionIds].sort()
   return useQuery({
     queryKey: ['sessions', 'attendeesForSessions', key] as const,
-    queryFn: () => attendanceService.getAttendeesForSessions(key),
-    enabled: key.length > 0,
+    queryFn: () => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return attendanceService.getAttendeesForSessions(currentGroupId, key)
+    },
+    enabled: Boolean(currentGroupId) && key.length > 0,
   })
 }
 
 /** Every non-archived session a player has attended — the seed query for Player History. */
 export function useSessionsForPlayerQuery(playerId: string) {
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
+
   return useQuery({
     queryKey: ['players', playerId, 'sessions'] as const,
-    queryFn: () => attendanceService.getSessionsForPlayer(playerId),
-    enabled: Boolean(playerId),
+    queryFn: () => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return attendanceService.getSessionsForPlayer(currentGroupId, playerId)
+    },
+    enabled: Boolean(currentGroupId) && Boolean(playerId),
   })
 }
 
@@ -51,10 +80,15 @@ export function useSessionsForPlayerQuery(playerId: string) {
 export function useAddAttendanceMutation(sessionId: string) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
 
   return useMutation({
-    mutationFn: (playerId: string) =>
-      attendanceService.addPlayer(sessionId, playerId),
+    mutationFn: (playerId: string) => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return attendanceService.addPlayer(currentGroupId, sessionId, playerId)
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: sessionQueryKeys.attendance(sessionId),
@@ -70,10 +104,15 @@ export function useAddAttendanceMutation(sessionId: string) {
 export function useRemoveAttendanceMutation(sessionId: string) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
 
   return useMutation({
-    mutationFn: (sessionPlayerId: string) =>
-      attendanceService.removePlayer(sessionPlayerId),
+    mutationFn: (sessionPlayerId: string) => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return attendanceService.removePlayer(currentGroupId, sessionPlayerId)
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: sessionQueryKeys.attendance(sessionId),

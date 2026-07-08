@@ -45,9 +45,9 @@ function persistInBackground(sessionId: string, schedule: SessionSchedule): void
   })
 }
 
-async function loadRuntimeContext(sessionId: string) {
+async function loadRuntimeContext(groupId: string, sessionId: string) {
   const session   = await sessionsService.getById(sessionId)
-  const attendees = await attendanceService.getSessionAttendees(sessionId)
+  const attendees = await attendanceService.getSessionAttendees(groupId, sessionId)
   const playerIds = attendees.map(a => a.player_id)
   const players: GeneratorPlayer[] = playerIds.map(id => ({ id }))
   const nameById  = new Map(attendees.map(a => [a.player_id, a.players.name]))
@@ -162,8 +162,8 @@ function regenerateRemaining(
  * round after that — no manual "return" action required. The current LIVE
  * round and all finished rounds are untouched either way.
  */
-async function restNextRound(sessionId: string, schedule: SessionSchedule, playerId: string): Promise<RuntimeActionOutcome> {
-  const { players, playerIds, courtCount, nameById } = await loadRuntimeContext(sessionId)
+async function restNextRound(groupId: string, sessionId: string, schedule: SessionSchedule, playerId: string): Promise<RuntimeActionOutcome> {
+  const { players, playerIds, courtCount, nameById } = await loadRuntimeContext(groupId, sessionId)
   const bounds = nextRoundBounds(schedule.matches, courtCount)
 
   if (!bounds) {
@@ -201,13 +201,13 @@ async function restNextRound(sessionId: string, schedule: SessionSchedule, playe
  * that Rest Next Round auto-expires after one round, but still available
  * for the organiser to cancel a rest early.
  */
-async function returnToRotation(sessionId: string, schedule: SessionSchedule, playerId: string): Promise<RuntimeActionOutcome> {
+async function returnToRotation(groupId: string, sessionId: string, schedule: SessionSchedule, playerId: string): Promise<RuntimeActionOutcome> {
   const current = schedule.playerStates.get(playerId)
   if (current?.status !== 'RESTING') {
     throw new Error('returnToRotation: player is not currently resting.')
   }
 
-  const { players, playerIds, courtCount, nameById } = await loadRuntimeContext(sessionId)
+  const { players, playerIds, courtCount, nameById } = await loadRuntimeContext(groupId, sessionId)
   const newStates = setStatus(schedule, playerId, { playerId, status: 'AVAILABLE' })
   const outcome   = regenerateRemaining(schedule, newStates, players, playerIds, courtCount)
   persistInBackground(sessionId, outcome.schedule)
@@ -238,8 +238,8 @@ function isScheduledInFuture(matches: readonly PlannedMatch[], courtCount: numbe
  * could surface a false "recovery" prompt for a departure that didn't
  * actually require rebuilding anything.
  */
-async function leaveSession(sessionId: string, schedule: SessionSchedule, playerId: string): Promise<RuntimeActionOutcome> {
-  const { players, playerIds, courtCount, nameById } = await loadRuntimeContext(sessionId)
+async function leaveSession(groupId: string, sessionId: string, schedule: SessionSchedule, playerId: string): Promise<RuntimeActionOutcome> {
+  const { players, playerIds, courtCount, nameById } = await loadRuntimeContext(groupId, sessionId)
   const newStates = setStatus(schedule, playerId, { playerId, status: 'LEFT' })
 
   const round = currentRoundNumber(schedule.matches, courtCount)
@@ -258,12 +258,12 @@ async function leaveSession(sessionId: string, schedule: SessionSchedule, player
 }
 
 /** Mark Absent — only valid before the player's first match (never played a LIVE/FINISHED match yet). */
-async function markAbsent(sessionId: string, schedule: SessionSchedule, playerId: string): Promise<RuntimeActionOutcome> {
+async function markAbsent(groupId: string, sessionId: string, schedule: SessionSchedule, playerId: string): Promise<RuntimeActionOutcome> {
   if (hasPlayerStarted(schedule.matches, playerId)) {
     throw new Error('markAbsent: player has already played and can no longer be marked absent.')
   }
 
-  const { players, playerIds, courtCount, nameById } = await loadRuntimeContext(sessionId)
+  const { players, playerIds, courtCount, nameById } = await loadRuntimeContext(groupId, sessionId)
   const newStates = setStatus(schedule, playerId, { playerId, status: 'ABSENT' })
   const outcome   = regenerateRemaining(schedule, newStates, players, playerIds, courtCount)
   persistInBackground(sessionId, outcome.schedule)
@@ -285,12 +285,13 @@ async function markAbsent(sessionId: string, schedule: SessionSchedule, playerId
  * conflict. `regenerationFailed` is therefore always false for this action.
  */
 async function replacePlayer(
+  groupId: string,
   sessionId: string,
   schedule: SessionSchedule,
   oldPlayerId: string,
   newPlayerId: string,
 ): Promise<RuntimeActionOutcome> {
-  const { playerIds, courtCount, nameById } = await loadRuntimeContext(sessionId)
+  const { playerIds, courtCount, nameById } = await loadRuntimeContext(groupId, sessionId)
   if (!playerIds.includes(newPlayerId)) {
     throw new Error('replacePlayer: replacement must already be an attendee of this session.')
   }
