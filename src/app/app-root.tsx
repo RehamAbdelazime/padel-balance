@@ -1,5 +1,6 @@
 import { useBootstrap } from '@/features/app-bootstrap/hooks/use-bootstrap'
 import { AuthenticationFlow } from '@/features/auth/components/authentication-flow'
+import { NoGroupsFlow } from '@/features/groups/components/no-groups-flow'
 
 function AppSplash() {
   return <div>Loading...</div>
@@ -7,10 +8,6 @@ function AppSplash() {
 
 function AppError() {
   return <div>Something went wrong</div>
-}
-
-function NoGroupsScreen() {
-  return <div>No Groups</div>
 }
 
 function GroupSelectionScreen() {
@@ -36,7 +33,7 @@ export function AppRoot() {
     case 'UNAUTHENTICATED':
       return <AuthenticationFlow />
     case 'NO_GROUPS':
-      return <NoGroupsScreen />
+      return <NoGroupsFlow />
     case 'SELECT_GROUP':
       return <GroupSelectionScreen />
     case 'READY':
