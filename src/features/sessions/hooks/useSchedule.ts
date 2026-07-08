@@ -6,8 +6,11 @@ import { matchRuntimeService } from '../services/match-runtime.service'
 import { playerRuntimeService } from '../services/player-runtime.service'
 import { schedulePersistenceService } from '../services/schedule-persistence.service'
 import { friendlyScheduleErrorMessage } from '../utils'
+import { useCurrentGroupStore } from '@/app/store/current-group.store'
 import type { SessionSchedule, PlayerRuntimeStatus, LiveMatchScore } from '../types'
 import type { RuntimeActionOutcome } from '../services/player-runtime.service'
+
+const NO_CURRENT_GROUP_ERROR = 'No current group selected'
 
 export type RuntimeRecoveryAction = 'REST' | 'RETURN' | 'LEAVE' | 'ABSENT' | 'REPLACE'
 
@@ -38,6 +41,7 @@ export type LastRuntimeAction = {
  */
 export function useSchedule(sessionId: string) {
   const { t } = useTranslation()
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
   const [schedule, setSchedule]             = useState<SessionSchedule | null>(null)
   const [formatId, setFormatId]             = useState<string | null>(null)
   const [isLoading, setIsLoading]           = useState(false)
@@ -150,7 +154,8 @@ export function useSchedule(sessionId: string) {
     // ── Async operations ───────────────────────────────────────────────────────
     create: (count: number) =>
       runAsync(async () => {
-        const created = await scheduleService.createSchedule(sessionId, count)
+        if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+        const created = await scheduleService.createSchedule(currentGroupId, sessionId, count)
         setFormatId('custom')
         return created
       }),
@@ -158,32 +163,44 @@ export function useSchedule(sessionId: string) {
     /** Regenerate the match at the given 0-based index. */
     regenerateAt: (index: number) =>
       schedule
-        ? runAsync(() =>
-            scheduleService.regenerateCurrentMatch(
+        ? runAsync(() => {
+            if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+            return scheduleService.regenerateCurrentMatch(
+              currentGroupId,
               { ...schedule, currentMatchIndex: index },
               sessionId,
-            ))
+            )
+          })
         : void 0,
 
     /** Regenerate all matches after the given 0-based from-index. */
     regenerateFrom: (fromIndex: number) =>
       schedule
-        ? runAsync(() =>
-            scheduleService.regenerateRemainingMatches(
-              // service reads (currentMatchIndex ?? 0) + 1 as the start
+        ? runAsync(() => {
+            if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+            // service reads (currentMatchIndex ?? 0) + 1 as the start
+            return scheduleService.regenerateRemainingMatches(
+              currentGroupId,
               { ...schedule, currentMatchIndex: fromIndex - 1 },
               sessionId,
-            ))
+            )
+          })
         : void 0,
 
     regenerateAll: () =>
       schedule
-        ? runAsync(() => scheduleService.regenerateEntireSchedule(schedule, sessionId))
+        ? runAsync(() => {
+            if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+            return scheduleService.regenerateEntireSchedule(currentGroupId, schedule, sessionId)
+          })
         : void 0,
 
     recalculate: () =>
       schedule
-        ? runAsync(() => scheduleService.recalculateBalanceOnly(schedule, sessionId))
+        ? runAsync(() => {
+            if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+            return scheduleService.recalculateBalanceOnly(currentGroupId, schedule, sessionId)
+          })
         : void 0,
 
     // ── Sync operations (persisted in the background by schedule.service) ─────
@@ -230,22 +247,37 @@ export function useSchedule(sessionId: string) {
 
     // ── Runtime player management ───────────────────────────────────────────────
     restNextRound: (playerId: string) =>
-      void runRuntimeAction('REST', playerId, s => playerRuntimeService.restNextRound(sessionId, s, playerId)),
+      void runRuntimeAction('REST', playerId, s => {
+        if (!currentGroupId) return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+        return playerRuntimeService.restNextRound(currentGroupId, sessionId, s, playerId)
+      }),
 
     returnToRotation: (playerId: string) =>
-      void runRuntimeAction('RETURN', playerId, s => playerRuntimeService.returnToRotation(sessionId, s, playerId)),
+      void runRuntimeAction('RETURN', playerId, s => {
+        if (!currentGroupId) return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+        return playerRuntimeService.returnToRotation(currentGroupId, sessionId, s, playerId)
+      }),
 
     leaveSession: (playerId: string) =>
-      void runRuntimeAction('LEAVE', playerId, s => playerRuntimeService.leaveSession(sessionId, s, playerId)),
+      void runRuntimeAction('LEAVE', playerId, s => {
+        if (!currentGroupId) return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+        return playerRuntimeService.leaveSession(currentGroupId, sessionId, s, playerId)
+      }),
 
     markAbsent: (playerId: string) =>
-      void runRuntimeAction('ABSENT', playerId, s => playerRuntimeService.markAbsent(sessionId, s, playerId)),
+      void runRuntimeAction('ABSENT', playerId, s => {
+        if (!currentGroupId) return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+        return playerRuntimeService.markAbsent(currentGroupId, sessionId, s, playerId)
+      }),
 
     /** Replace Player → "Remaining Session" mode. */
     replacePlayer: (oldPlayerId: string, newPlayerId: string) =>
       void runRuntimeAction(
         'REPLACE', oldPlayerId,
-        s => playerRuntimeService.replacePlayer(sessionId, s, oldPlayerId, newPlayerId),
+        s => {
+          if (!currentGroupId) return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+          return playerRuntimeService.replacePlayer(currentGroupId, sessionId, s, oldPlayerId, newPlayerId)
+        },
       ),
 
     // ── Recovery (when a runtime action's regeneration couldn't proceed) ──────
