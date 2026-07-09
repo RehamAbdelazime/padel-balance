@@ -1,6 +1,15 @@
 import { supabase } from '@/infrastructure/supabase/client'
 import { computeQuality } from '../generators/custom.generator'
-import type { SessionSchedule, PlannedMatch, LiveMatchScore, PlayerRuntimeState } from '../types'
+import type {
+  SessionSchedule,
+  PlannedMatch,
+  LiveMatchScore,
+  PlayerRuntimeState,
+  PlannedMatchOrigin,
+  PlannedMatchProtection,
+  MatchRuntimeStatus,
+  PlayerRuntimeStatus,
+} from '../types'
 import type { Database } from '@/infrastructure/supabase/types'
 
 type ScheduleMatchRow = Database['public']['Tables']['session_schedule_matches']['Row']
@@ -43,8 +52,8 @@ function mapMatchRow(row: ScheduleMatchRow): PlannedMatch {
 
   return {
     id:           row.match_id,
-    origin:       row.origin,
-    protection:   row.protection,
+    origin:       row.origin as PlannedMatchOrigin,
+    protection:   row.protection as PlannedMatchProtection,
     modified:     row.modified,
     courtNumber:  row.court_number,
     teamA:        [row.team_a_player1, row.team_a_player2],
@@ -53,7 +62,7 @@ function mapMatchRow(row: ScheduleMatchRow): PlannedMatch {
     warnings:     row.warnings,
     isCompleted:  row.is_completed,
     ...(result ? { result } : {}),
-    matchStatus:  row.match_status,
+    matchStatus:  row.match_status as MatchRuntimeStatus,
   }
 }
 
@@ -89,7 +98,7 @@ async function loadSchedule(sessionId: string): Promise<PersistedSchedule | null
       row.player_id,
       {
         playerId: row.player_id,
-        status:   row.status,
+        status:   row.status as PlayerRuntimeStatus,
         ...(row.replaced_by_player_id ? { replacedByPlayerId: row.replaced_by_player_id } : {}),
       },
     ]),

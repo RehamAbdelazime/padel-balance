@@ -59,6 +59,7 @@ function statusBadgeVariant(status: SessionStatus): 'outline' | 'default' | 'sec
     case 'LIVE':      return 'default'
     case 'FINISHED':  return 'secondary'
     case 'CANCELLED': return 'destructive'
+    default:          return 'outline'
   }
 }
 

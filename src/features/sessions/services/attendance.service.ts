@@ -24,17 +24,18 @@ async function assertSessionInGroup(groupId: string, sessionId: string): Promise
   if (!data) throw new Error('Session does not belong to the current group')
 }
 
-/** Throws unless the player belongs to groupId. */
-async function assertPlayerInGroup(groupId: string, playerId: string): Promise<void> {
+/** Throws unless the player belongs to groupId. Returns the player's name for use as a snapshot. */
+async function assertPlayerInGroup(groupId: string, playerId: string): Promise<{ name: string }> {
   const { data, error } = await supabase
     .from('players')
-    .select('id')
+    .select('id, name')
     .eq('id', playerId)
     .eq('group_id', groupId)
     .maybeSingle()
 
   if (error) throw new Error(error.message)
   if (!data) throw new Error('Player does not belong to the current group')
+  return data
 }
 
 /**
@@ -152,11 +153,11 @@ async function getSessionsForPlayer(groupId: string, playerId: string): Promise<
 /** Adds a player to a session. The DB UNIQUE constraint prevents duplicates. */
 async function addPlayer(groupId: string, sessionId: string, playerId: string): Promise<SessionPlayer> {
   await assertSessionInGroup(groupId, sessionId)
-  await assertPlayerInGroup(groupId, playerId)
+  const { name } = await assertPlayerInGroup(groupId, playerId)
 
   const { data, error } = await supabase
     .from('session_players')
-    .insert({ session_id: sessionId, player_id: playerId })
+    .insert({ session_id: sessionId, player_id: playerId, player_name_snapshot: name })
     .select()
     .single()
 

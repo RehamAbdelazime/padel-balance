@@ -34,7 +34,8 @@ export class GroupsService {
       throw error
     }
 
-    const groups = (data ?? [])
+    const rows = (data ?? []) as unknown as Array<{ groups: Group | null }>
+    const groups = rows
       .map((row) => row.groups)
       .filter((group): group is Group => group !== null)
 
@@ -102,7 +103,7 @@ export class GroupsService {
     }
   }
 
-  async regenerateGroupCode(groupId: string): Promise<string> {
+  async regenerateGroupCode(_groupId: string): Promise<string> {
     throw new Error('Not implemented')
   }
 }

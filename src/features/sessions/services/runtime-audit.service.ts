@@ -1,5 +1,5 @@
 import { supabase } from '@/infrastructure/supabase/client'
-import type { RuntimeEventTypeRow } from '@/infrastructure/supabase/types'
+import type { Tables } from '@/infrastructure/supabase/types'
 
 /**
  * runtime-audit.service — append-only log of runtime player-management
@@ -7,7 +7,7 @@ import type { RuntimeEventTypeRow } from '@/infrastructure/supabase/types'
  * no UI reads this yet.
  */
 
-export type RuntimeEventType = RuntimeEventTypeRow
+export type RuntimeEventType = Tables<'session_runtime_events'>['event_type']
 
 export type RuntimeEvent = {
   readonly id:               string
