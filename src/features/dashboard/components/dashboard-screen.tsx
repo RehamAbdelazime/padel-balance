@@ -1,55 +1,46 @@
+import { PageContainer } from '@/shared/components/page/page-container'
+import { PageHeader } from '@/shared/components/page/page-header'
+import { PageSection } from '@/shared/components/page/page-section'
+
 export function DashboardScreen() {
   return (
-    <section>
-      <header>
-        <h1>Dashboard</h1>
-        <p>Overview of your group's activity.</p>
-      </header>
+    <PageContainer>
+      <PageHeader title="Dashboard" description="Overview of your group's activity." />
 
-      <section aria-labelledby="current-group-heading">
-        <h2 id="current-group-heading">Current Group</h2>
-        <p>The group you are currently viewing.</p>
-
+      <PageSection title="Current Group" description="The group you are currently viewing.">
         {/* TODO: Active group name */}
 
         {/* TODO: Switch group action */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="quick-actions-heading">
-        <h2 id="quick-actions-heading">Quick Actions</h2>
-        <p>Shortcuts to common organiser tasks.</p>
-
+      <PageSection title="Quick Actions" description="Shortcuts to common organiser tasks.">
         {/* TODO: Create Session action */}
 
         {/* TODO: Add Player action */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="todays-sessions-heading">
-        <h2 id="todays-sessions-heading">Today's Sessions</h2>
-        <p>Sessions scheduled for today.</p>
-
+      <PageSection title="Today's Sessions" description="Sessions scheduled for today.">
         {/* TODO: Today's sessions list */}
 
         {/* TODO: Empty state */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="recent-sessions-heading">
-        <h2 id="recent-sessions-heading">Recent Sessions</h2>
-        <p>The most recently completed sessions.</p>
-
+      <PageSection title="Recent Sessions" description="The most recently completed sessions.">
         {/* TODO: Recent sessions list */}
 
         {/* TODO: Empty state */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="players-summary-heading">
-        <h2 id="players-summary-heading">Players Summary</h2>
-        <p>An overview of the group's players.</p>
-
+      <PageSection title="Players Summary" description="An overview of the group's players.">
         {/* TODO: Player counts */}
 
         {/* TODO: Recently active players */}
-      </section>
-    </section>
+        <></>
+      </PageSection>
+    </PageContainer>
   )
 }

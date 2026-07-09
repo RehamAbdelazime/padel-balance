@@ -1,44 +1,40 @@
+import { PageContainer } from '@/shared/components/page/page-container'
+import { PageHeader } from '@/shared/components/page/page-header'
+import { PageSection } from '@/shared/components/page/page-section'
+
 export function PlayersScreen() {
   return (
-    <section>
-      <header>
-        <h1>Players</h1>
-        <p>Manage players.</p>
-      </header>
+    <PageContainer>
+      <PageHeader title="Players" description="Manage players." />
 
-      <section aria-labelledby="players-toolbar-heading">
-        <h2 id="players-toolbar-heading">Toolbar</h2>
-
+      <PageSection title="Toolbar">
         {/* TODO: Search */}
 
         {/* TODO: Filters */}
 
         {/* TODO: Sort */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="players-primary-action-heading">
-        <h2 id="players-primary-action-heading">Primary Action</h2>
-
+      <PageSection title="Primary Action">
         {/* TODO: Create Player */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="players-table-heading">
-        <h2 id="players-table-heading">Players Table</h2>
-
+      <PageSection title="Players Table">
         {/* TODO: Players table placeholder */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="players-empty-state-heading">
-        <h2 id="players-empty-state-heading">Empty State</h2>
-
+      <PageSection title="Empty State">
         {/* TODO: Empty state placeholder */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="players-pagination-heading">
-        <h2 id="players-pagination-heading">Pagination</h2>
-
+      <PageSection title="Pagination">
         {/* TODO: Pagination placeholder */}
-      </section>
-    </section>
+        <></>
+      </PageSection>
+    </PageContainer>
   )
 }

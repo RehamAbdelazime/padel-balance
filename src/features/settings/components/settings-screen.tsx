@@ -1,40 +1,36 @@
+import { PageContainer } from '@/shared/components/page/page-container'
+import { PageHeader } from '@/shared/components/page/page-header'
+import { PageSection } from '@/shared/components/page/page-section'
+
 export function SettingsScreen() {
   return (
-    <section>
-      <header>
-        <h1>Settings</h1>
-        <p>Manage group settings.</p>
-      </header>
+    <PageContainer>
+      <PageHeader title="Settings" description="Manage group settings." />
 
-      <section aria-labelledby="settings-appearance-heading">
-        <h2 id="settings-appearance-heading">Appearance</h2>
-
+      <PageSection title="Appearance">
         {/* TODO: Appearance placeholder */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="settings-notifications-heading">
-        <h2 id="settings-notifications-heading">Notifications</h2>
-
+      <PageSection title="Notifications">
         {/* TODO: Notifications placeholder */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="settings-language-heading">
-        <h2 id="settings-language-heading">Language</h2>
-
+      <PageSection title="Language">
         {/* TODO: Language placeholder */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="settings-about-heading">
-        <h2 id="settings-about-heading">About</h2>
-
+      <PageSection title="About">
         {/* TODO: About placeholder */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="settings-danger-zone-heading">
-        <h2 id="settings-danger-zone-heading">Danger Zone</h2>
-
+      <PageSection title="Danger Zone">
         {/* TODO: Danger zone placeholder */}
-      </section>
-    </section>
+        <></>
+      </PageSection>
+    </PageContainer>
   )
 }

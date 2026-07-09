@@ -1,40 +1,36 @@
+import { PageContainer } from '@/shared/components/page/page-container'
+import { PageHeader } from '@/shared/components/page/page-header'
+import { PageSection } from '@/shared/components/page/page-section'
+
 export function ProfileScreen() {
   return (
-    <section>
-      <header>
-        <h1>Profile</h1>
-        <p>Manage your profile.</p>
-      </header>
+    <PageContainer>
+      <PageHeader title="Profile" description="Manage your profile." />
 
-      <section aria-labelledby="profile-avatar-heading">
-        <h2 id="profile-avatar-heading">Avatar</h2>
-
+      <PageSection title="Avatar">
         {/* TODO: Avatar placeholder */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="profile-personal-information-heading">
-        <h2 id="profile-personal-information-heading">Personal Information</h2>
-
+      <PageSection title="Personal Information">
         {/* TODO: Personal information placeholder */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="profile-preferences-heading">
-        <h2 id="profile-preferences-heading">Preferences</h2>
-
+      <PageSection title="Preferences">
         {/* TODO: Preferences placeholder */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="profile-language-heading">
-        <h2 id="profile-language-heading">Language</h2>
-
+      <PageSection title="Language">
         {/* TODO: Language placeholder */}
-      </section>
+        <></>
+      </PageSection>
 
-      <section aria-labelledby="profile-account-actions-heading">
-        <h2 id="profile-account-actions-heading">Account Actions</h2>
-
+      <PageSection title="Account Actions">
         {/* TODO: Account actions placeholder */}
-      </section>
-    </section>
+        <></>
+      </PageSection>
+    </PageContainer>
   )
 }
