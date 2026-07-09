@@ -37,6 +37,19 @@ export type PersistedSchedule = {
   readonly formatId: string
 }
 
+/** Throws unless the session belongs to groupId. */
+async function assertSessionInGroup(groupId: string, sessionId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('id')
+    .eq('id', sessionId)
+    .eq('group_id', groupId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error('Session does not belong to the current group')
+}
+
 // ── Load ──────────────────────────────────────────────────────────────────────
 
 /**
@@ -66,11 +79,12 @@ function mapMatchRow(row: ScheduleMatchRow): PlannedMatch {
   }
 }
 
-async function loadSchedule(sessionId: string): Promise<PersistedSchedule | null> {
+async function loadSchedule(groupId: string, sessionId: string): Promise<PersistedSchedule | null> {
   const { data: scheduleRow, error: scheduleError } = await supabase
     .from('session_schedules')
     .select('*')
     .eq('session_id', sessionId)
+    .eq('group_id', groupId)
     .maybeSingle()
 
   if (scheduleError) throw new Error(scheduleError.message)
@@ -128,6 +142,7 @@ async function loadSchedule(sessionId: string): Promise<PersistedSchedule | null
  * Sessions with no schedule yet are simply absent from the returned map.
  */
 async function getFormatIdsForSessions(
+  groupId: string,
   sessionIds: readonly string[],
 ): Promise<Map<string, string>> {
   if (sessionIds.length === 0) return new Map()
@@ -136,6 +151,7 @@ async function getFormatIdsForSessions(
     .from('session_schedules')
     .select('session_id, format_id')
     .in('session_id', sessionIds)
+    .eq('group_id', groupId)
 
   if (error) throw new Error(error.message)
   return new Map(data.map(row => [row.session_id, row.format_id]))
@@ -150,6 +166,7 @@ export type SessionMatchesSummary = { readonly formatId: string; readonly matche
  * yet are simply absent from the returned map.
  */
 async function getMatchesForSessions(
+  groupId: string,
   sessionIds: readonly string[],
 ): Promise<Map<string, SessionMatchesSummary>> {
   if (sessionIds.length === 0) return new Map()
@@ -158,6 +175,7 @@ async function getMatchesForSessions(
     .from('session_schedules')
     .select('id, session_id, format_id')
     .in('session_id', sessionIds)
+    .eq('group_id', groupId)
 
   if (scheduleError) throw new Error(scheduleError.message)
   if (scheduleRows.length === 0) return new Map()
@@ -196,14 +214,18 @@ async function getMatchesForSessions(
  * lock, swap, ...) may omit it — the existing row's format_id is preserved.
  */
 async function saveSchedule(
+  groupId: string,
   sessionId: string,
   schedule: SessionSchedule,
   formatId?: string,
 ): Promise<void> {
+  await assertSessionInGroup(groupId, sessionId)
+
   const { data: existing, error: existingError } = await supabase
     .from('session_schedules')
     .select('id, format_id')
     .eq('session_id', sessionId)
+    .eq('group_id', groupId)
     .maybeSingle()
 
   if (existingError) throw new Error(existingError.message)
@@ -220,6 +242,7 @@ async function saveSchedule(
     .upsert(
       {
         session_id:          sessionId,
+        group_id:            groupId,
         format_id:           effectiveFormatId,
         version:             schedule.version,
         target_count:        schedule.targetCount,

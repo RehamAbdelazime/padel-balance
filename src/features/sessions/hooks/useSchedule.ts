@@ -53,12 +53,12 @@ export function useSchedule(sessionId: string) {
   // ── Initial load — restores the persisted schedule; never generates one ────
   useEffect(() => {
     let cancelled = false
-    if (!sessionId) {
+    if (!sessionId || !currentGroupId) {
       setInitialLoading(false)
       return
     }
     setInitialLoading(true)
-    scheduleService.loadSchedule(sessionId)
+    scheduleService.loadSchedule(currentGroupId, sessionId)
       .then(persisted => {
         if (cancelled) return
         setSchedule(persisted?.schedule ?? null)
@@ -73,7 +73,7 @@ export function useSchedule(sessionId: string) {
         if (!cancelled) setInitialLoading(false)
       })
     return () => { cancelled = true }
-  }, [sessionId])
+  }, [sessionId, currentGroupId])
 
   // ── Async helper ────────────────────────────────────────────────────────────
   async function runAsync(op: () => Promise<SessionSchedule>): Promise<void> {
@@ -204,21 +204,39 @@ export function useSchedule(sessionId: string) {
         : void 0,
 
     // ── Sync operations (persisted in the background by schedule.service) ─────
-    lockMatch:   (id: string) => runSync(s => scheduleService.lockMatch(s, id)),
-    unlockMatch: (id: string) => runSync(s => scheduleService.unlockMatch(s, id)),
-    removeMatch: (id: string) => runSync(s => scheduleService.removeMatch(s, id)),
+    lockMatch:   (id: string) => runSync(s => {
+      if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+      return scheduleService.lockMatch(currentGroupId, s, id)
+    }),
+    unlockMatch: (id: string) => runSync(s => {
+      if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+      return scheduleService.unlockMatch(currentGroupId, s, id)
+    }),
+    removeMatch: (id: string) => runSync(s => {
+      if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+      return scheduleService.removeMatch(currentGroupId, s, id)
+    }),
 
     addManualMatch: (
       teamA: readonly [string, string],
       teamB: readonly [string, string],
-    ) => runSync(s => scheduleService.addManualMatch(s, teamA, teamB)),
+    ) => runSync(s => {
+      if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+      return scheduleService.addManualMatch(currentGroupId, s, teamA, teamB)
+    }),
 
     /** Also used for Replace Player → "This Round Only" mode (a same-match swap). */
     swapPlayer: (matchId: string, fromId: string, toId: string) =>
-      runSync(s => scheduleService.swapPlayer(s, matchId, fromId, toId)),
+      runSync(s => {
+        if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+        return scheduleService.swapPlayer(currentGroupId, s, matchId, fromId, toId)
+      }),
 
     setPlayerStatus: (playerId: string, status: PlayerRuntimeStatus) =>
-      runSync(s => scheduleService.setPlayerStatus(s, playerId, status)),
+      runSync(s => {
+        if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+        return scheduleService.setPlayerStatus(currentGroupId, s, playerId, status)
+      }),
 
     /**
      * Initializes match runtime statuses (first N matches -> LIVE, rest ->
@@ -226,24 +244,39 @@ export function useSchedule(sessionId: string) {
      * Number of Courts; falls back to inferring from the schedule's matches
      * if omitted.
      */
-    startMatches: (courtCount?: number) => runSync(s => scheduleService.startMatches(s, courtCount)),
+    startMatches: (courtCount?: number) => runSync(s => {
+      if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+      return scheduleService.startMatches(currentGroupId, s, courtCount)
+    }),
 
     // ── Live runtime operations ─────────────────────────────────────────────────
     /** Starts a Pending match (Critical Runtime Review) — validates round order, court conflicts, and player conflicts. */
     startMatch: (matchId: string, courtCount: number) =>
-      runSync(s => matchRuntimeService.startMatch(s, matchId, courtCount), true),
+      runSync(s => {
+        if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+        return matchRuntimeService.startMatch(currentGroupId, s, matchId, courtCount)
+      }, true),
 
     /** Autosaves an in-progress score for a LIVE match. Either side may be null. */
     setLiveScore: (matchId: string, score: LiveMatchScore) =>
-      runSync(s => matchRuntimeService.setLiveScore(s, matchId, score)),
+      runSync(s => {
+        if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+        return matchRuntimeService.setLiveScore(currentGroupId, s, matchId, score)
+      }),
 
     /** Validates, locks the score, marks the match FINISHED. Does not auto-start the next round — the organiser starts each match explicitly. */
     finishMatch: (matchId: string, courtCount: number) =>
-      runSync(s => matchRuntimeService.finishMatch(s, matchId, courtCount), true),
+      runSync(s => {
+        if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+        return matchRuntimeService.finishMatch(currentGroupId, s, matchId, courtCount)
+      }, true),
 
     /** Cancels a LIVE or PENDING match (never a FINISHED one) — counts as terminal for round advancement. */
     cancelMatch: (matchId: string, courtCount: number) =>
-      runSync(s => matchRuntimeService.cancelMatch(s, matchId, courtCount), true),
+      runSync(s => {
+        if (!currentGroupId) throw new Error(NO_CURRENT_GROUP_ERROR)
+        return matchRuntimeService.cancelMatch(currentGroupId, s, matchId, courtCount)
+      }, true),
 
     // ── Runtime player management ───────────────────────────────────────────────
     restNextRound: (playerId: string) =>
@@ -285,9 +318,11 @@ export function useSchedule(sessionId: string) {
     undoRecovery: () => {
       if (!recovery) return
       setSchedule(recovery.previousSchedule)
-      void schedulePersistenceService.saveSchedule(sessionId, recovery.previousSchedule).catch(err => {
-        console.error('[useSchedule] undo save failed:', err)
-      })
+      if (currentGroupId) {
+        void schedulePersistenceService.saveSchedule(currentGroupId, sessionId, recovery.previousSchedule).catch(err => {
+          console.error('[useSchedule] undo save failed:', err)
+        })
+      }
       setRecovery(null)
     },
     dismissRecovery: () => setRecovery(null),
@@ -297,9 +332,11 @@ export function useSchedule(sessionId: string) {
     undoLastAction: () => {
       if (!lastAction) return
       setSchedule(lastAction.previousSchedule)
-      void schedulePersistenceService.saveSchedule(sessionId, lastAction.previousSchedule).catch(err => {
-        console.error('[useSchedule] undo save failed:', err)
-      })
+      if (currentGroupId) {
+        void schedulePersistenceService.saveSchedule(currentGroupId, sessionId, lastAction.previousSchedule).catch(err => {
+          console.error('[useSchedule] undo save failed:', err)
+        })
+      }
       setLastAction(null)
     },
 

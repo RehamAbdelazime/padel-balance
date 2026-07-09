@@ -100,8 +100,8 @@ function playerIdsFromSchedule(schedule: SessionSchedule): string[] {
  * local edit; the next mutation's save attempt will simply retry with the
  * latest state.
  */
-function persistInBackground(schedule: SessionSchedule): void {
-  void schedulePersistenceService.saveSchedule(schedule.sessionId, schedule).catch(err => {
+function persistInBackground(groupId: string, schedule: SessionSchedule): void {
+  void schedulePersistenceService.saveSchedule(groupId, schedule.sessionId, schedule).catch(err => {
     console.error('[schedule.service] background save failed:', err)
   })
 }
@@ -110,8 +110,8 @@ function persistInBackground(schedule: SessionSchedule): void {
 // ── Public API — schedule loading ─────────────────────────────────────────────
 
 /** Loads the persisted schedule for a session, or null if none exists yet. */
-async function loadSchedule(sessionId: string): Promise<PersistedSchedule | null> {
-  return schedulePersistenceService.loadSchedule(sessionId)
+async function loadSchedule(groupId: string, sessionId: string): Promise<PersistedSchedule | null> {
+  return schedulePersistenceService.loadSchedule(groupId, sessionId)
 }
 
 // ── Public API — schedule creation ────────────────────────────────────────────
@@ -131,7 +131,7 @@ async function createSchedule(
   const { context, courtCount } = await buildGeneratorContext(groupId, sessionId)
   const plan       = buildCustomPlan(context.playerIds.length, targetCount, courtCount)
   const schedule   = unwrapSchedule(await generator.generate(plan, context))
-  await schedulePersistenceService.saveSchedule(sessionId, schedule, generator.formatId)
+  await schedulePersistenceService.saveSchedule(groupId, sessionId, schedule, generator.formatId)
   return schedule
 }
 
@@ -142,6 +142,7 @@ async function createSchedule(
  * choice — there is no balance score to evaluate.
  */
 function addManualMatch(
+  groupId: string,
   schedule: SessionSchedule,
   teamA: readonly [string, string],
   teamB: readonly [string, string],
@@ -157,7 +158,7 @@ function addManualMatch(
   const playerIds  = playerIdsFromSchedule(schedule)
   const newQuality = computeQuality(newMatches, playerIds)
   const updated    = nextSchedule(schedule, { matches: newMatches, quality: newQuality })
-  persistInBackground(updated)
+  persistInBackground(groupId, updated)
   return updated
 }
 
@@ -165,7 +166,7 @@ function addManualMatch(
  * Removes a match. Completed and LOCKED matches cannot be removed.
  * Recalculates quality.
  */
-function removeMatch(schedule: SessionSchedule, id: string): SessionSchedule {
+function removeMatch(groupId: string, schedule: SessionSchedule, id: string): SessionSchedule {
   const match = schedule.matches.find(m => m.id === id)
   if (!match)              throw new Error(`removeMatch: match ${id} not found.`)
   if (match.isCompleted)   throw new Error(`removeMatch: match ${id} is completed and cannot be removed.`)
@@ -175,7 +176,7 @@ function removeMatch(schedule: SessionSchedule, id: string): SessionSchedule {
   const playerIds  = playerIdsFromSchedule(schedule)
   const newQuality = computeQuality(newMatches, playerIds)
   const updated    = nextSchedule(schedule, { matches: newMatches, quality: newQuality })
-  persistInBackground(updated)
+  persistInBackground(groupId, updated)
   return updated
 }
 
@@ -184,6 +185,7 @@ function removeMatch(schedule: SessionSchedule, id: string): SessionSchedule {
  * There is no balance score to re-evaluate — only quality is recalculated.
  */
 function swapPlayer(
+  groupId: string,
   schedule: SessionSchedule,
   matchId_: string,
   fromPlayerId: string,
@@ -203,21 +205,22 @@ function swapPlayer(
   const playerIds  = playerIdsFromSchedule(schedule)
   const newQuality = computeQuality(newMatches, playerIds)
   const updated    = nextSchedule(schedule, { matches: newMatches, quality: newQuality })
-  persistInBackground(updated)
+  persistInBackground(groupId, updated)
   return updated
 }
 
 // ── Public API — protection operations (sync) ────────────────────────────────
 
-function lockMatch(schedule: SessionSchedule, id: string): SessionSchedule {
-  return setProtection(schedule, id, 'LOCKED')
+function lockMatch(groupId: string, schedule: SessionSchedule, id: string): SessionSchedule {
+  return setProtection(groupId, schedule, id, 'LOCKED')
 }
 
-function unlockMatch(schedule: SessionSchedule, id: string): SessionSchedule {
-  return setProtection(schedule, id, 'UNLOCKED')
+function unlockMatch(groupId: string, schedule: SessionSchedule, id: string): SessionSchedule {
+  return setProtection(groupId, schedule, id, 'UNLOCKED')
 }
 
 function setProtection(
+  groupId: string,
   schedule: SessionSchedule,
   id: string,
   protection: PlannedMatchProtection,
@@ -230,7 +233,7 @@ function setProtection(
   // Protection is not content — modified is unchanged, quality is unchanged
   const newMatches = schedule.matches.map((m, i) => i === idx ? { ...m, protection } : m)
   const updated    = nextSchedule(schedule, { matches: newMatches })
-  persistInBackground(updated)
+  persistInBackground(groupId, updated)
   return updated
 }
 
@@ -247,11 +250,11 @@ function setProtection(
  * `_courtCount` is accepted (existing callers already pass the session's
  * Number of Courts) but no longer used — kept for call-site stability.
  */
-function startMatches(schedule: SessionSchedule, _courtCount?: number): SessionSchedule {
+function startMatches(groupId: string, schedule: SessionSchedule, _courtCount?: number): SessionSchedule {
   const updated = nextSchedule(schedule, { matches: schedule.matches })
-  persistInBackground(updated)
+  persistInBackground(groupId, updated)
 
-  void runtimeAuditService.logEvent(schedule.sessionId, 'SESSION_STARTED', null, 'Session started.').catch(err => {
+  void runtimeAuditService.logEvent(groupId, schedule.sessionId, 'SESSION_STARTED', null, 'Session started.').catch(err => {
     console.error('[schedule.service] audit log failed:', err)
   })
 
@@ -261,6 +264,7 @@ function startMatches(schedule: SessionSchedule, _courtCount?: number): SessionS
 // ── Public API — player runtime (sync) ───────────────────────────────────────
 
 function setPlayerStatus(
+  groupId: string,
   schedule: SessionSchedule,
   playerId: string,
   status: PlayerRuntimeStatus,
@@ -271,7 +275,7 @@ function setPlayerStatus(
   const newStates = new Map(schedule.playerStates)
   newStates.set(playerId, { playerId, status })
   const updated = nextSchedule(schedule, { playerStates: newStates })
-  persistInBackground(updated)
+  persistInBackground(groupId, updated)
   return updated
 }
 
@@ -288,7 +292,7 @@ async function regenerateCurrentMatch(
   const { context, courtCount } = await buildGeneratorContext(groupId, sessionId)
   const plan       = buildCustomPlan(context.playerIds.length, schedule.targetCount, courtCount)
   const updated    = unwrapSchedule(await generator.regenerate(schedule, plan, context, 'current'))
-  await schedulePersistenceService.saveSchedule(sessionId, updated)
+  await schedulePersistenceService.saveSchedule(groupId, sessionId, updated)
   return updated
 }
 
@@ -302,7 +306,7 @@ async function regenerateRemainingMatches(
   const { context, courtCount } = await buildGeneratorContext(groupId, sessionId)
   const plan       = buildCustomPlan(context.playerIds.length, schedule.targetCount, courtCount)
   const updated    = unwrapSchedule(await generator.regenerate(schedule, plan, context, 'remaining'))
-  await schedulePersistenceService.saveSchedule(sessionId, updated)
+  await schedulePersistenceService.saveSchedule(groupId, sessionId, updated)
   return updated
 }
 
@@ -316,7 +320,7 @@ async function regenerateEntireSchedule(
   const { context, courtCount } = await buildGeneratorContext(groupId, sessionId)
   const plan       = buildCustomPlan(context.playerIds.length, schedule.targetCount, courtCount)
   const updated    = unwrapSchedule(await generator.regenerate(schedule, plan, context, 'all'))
-  await schedulePersistenceService.saveSchedule(sessionId, updated)
+  await schedulePersistenceService.saveSchedule(groupId, sessionId, updated)
   return updated
 }
 
@@ -329,7 +333,7 @@ async function recalculateBalanceOnly(
   const { context, courtCount } = await buildGeneratorContext(groupId, sessionId)
   const plan       = buildCustomPlan(context.playerIds.length, schedule.targetCount, courtCount)
   const updated    = unwrapSchedule(await generator.regenerate(schedule, plan, context, 'recalculate-only'))
-  await schedulePersistenceService.saveSchedule(sessionId, updated)
+  await schedulePersistenceService.saveSchedule(groupId, sessionId, updated)
   return updated
 }
 

@@ -39,8 +39,8 @@ export type RuntimeActionOutcome = {
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-function persistInBackground(sessionId: string, schedule: SessionSchedule): void {
-  void schedulePersistenceService.saveSchedule(sessionId, schedule).catch(err => {
+function persistInBackground(groupId: string, sessionId: string, schedule: SessionSchedule): void {
+  void schedulePersistenceService.saveSchedule(groupId, sessionId, schedule).catch(err => {
     console.error('[player-runtime.service] background save failed:', err)
   })
 }
@@ -187,10 +187,10 @@ async function restNextRound(groupId: string, sessionId: string, schedule: Sessi
     quality:      newQuality,
     playerStates: availableStates,
   })
-  persistInBackground(sessionId, updated)
+  persistInBackground(groupId, sessionId, updated)
 
   const round = currentRoundNumber(schedule.matches, courtCount)
-  void logEvent(sessionId, 'REST', playerId,
+  void logEvent(groupId, sessionId, 'REST', playerId,
     `${nameById.get(playerId) ?? playerId} rested${round ? ` after Round ${round}` : ''}.`)
 
   return { schedule: updated, regenerationFailed: phase1.failed || phase2.failed }
@@ -210,9 +210,9 @@ async function returnToRotation(groupId: string, sessionId: string, schedule: Se
   const { players, playerIds, courtCount, nameById } = await loadRuntimeContext(groupId, sessionId)
   const newStates = setStatus(schedule, playerId, { playerId, status: 'AVAILABLE' })
   const outcome   = regenerateRemaining(schedule, newStates, players, playerIds, courtCount)
-  persistInBackground(sessionId, outcome.schedule)
+  persistInBackground(groupId, sessionId, outcome.schedule)
 
-  void logEvent(sessionId, 'RETURN', playerId, `${nameById.get(playerId) ?? playerId} returned to rotation.`)
+  void logEvent(groupId, sessionId, 'RETURN', playerId, `${nameById.get(playerId) ?? playerId} returned to rotation.`)
   return outcome
 }
 
@@ -243,17 +243,17 @@ async function leaveSession(groupId: string, sessionId: string, schedule: Sessio
   const newStates = setStatus(schedule, playerId, { playerId, status: 'LEFT' })
 
   const round = currentRoundNumber(schedule.matches, courtCount)
-  void logEvent(sessionId, 'LEAVE', playerId,
+  void logEvent(groupId, sessionId, 'LEAVE', playerId,
     `${nameById.get(playerId) ?? playerId} left session${round ? ` after Round ${round}` : ''}.`)
 
   if (!isScheduledInFuture(schedule.matches, courtCount, playerId)) {
     const updated = nextSchedule(schedule, { playerStates: newStates })
-    persistInBackground(sessionId, updated)
+    persistInBackground(groupId, sessionId, updated)
     return { schedule: updated, regenerationFailed: false }
   }
 
   const outcome = regenerateRemaining(schedule, newStates, players, playerIds, courtCount)
-  persistInBackground(sessionId, outcome.schedule)
+  persistInBackground(groupId, sessionId, outcome.schedule)
   return outcome
 }
 
@@ -266,9 +266,9 @@ async function markAbsent(groupId: string, sessionId: string, schedule: SessionS
   const { players, playerIds, courtCount, nameById } = await loadRuntimeContext(groupId, sessionId)
   const newStates = setStatus(schedule, playerId, { playerId, status: 'ABSENT' })
   const outcome   = regenerateRemaining(schedule, newStates, players, playerIds, courtCount)
-  persistInBackground(sessionId, outcome.schedule)
+  persistInBackground(groupId, sessionId, outcome.schedule)
 
-  void logEvent(sessionId, 'ABSENT', playerId, `${nameById.get(playerId) ?? playerId} marked absent.`)
+  void logEvent(groupId, sessionId, 'ABSENT', playerId, `${nameById.get(playerId) ?? playerId} marked absent.`)
   return outcome
 }
 
@@ -324,10 +324,10 @@ async function replacePlayer(
 
   const newQuality = computeQuality(newMatches, playerIds)
   const updated = nextSchedule(schedule, { matches: newMatches, quality: newQuality, playerStates: newStates })
-  persistInBackground(sessionId, updated)
+  persistInBackground(groupId, sessionId, updated)
 
   const round = currentRoundNumber(schedule.matches, courtCount)
-  void logEvent(sessionId, 'REPLACE', newPlayerId,
+  void logEvent(groupId, sessionId, 'REPLACE', newPlayerId,
     `${nameById.get(newPlayerId) ?? newPlayerId} replaced ${nameById.get(oldPlayerId) ?? oldPlayerId}` +
     `${round ? ` before Round ${round + 1}` : ''}.`,
     { relatedPlayerId: oldPlayerId })
@@ -336,6 +336,7 @@ async function replacePlayer(
 }
 
 async function logEvent(
+  groupId: string,
   sessionId: string,
   eventType: RuntimeEventType,
   playerId: string,
@@ -343,7 +344,7 @@ async function logEvent(
   options?: { relatedPlayerId?: string },
 ): Promise<void> {
   try {
-    await runtimeAuditService.logEvent(sessionId, eventType, playerId, message, options)
+    await runtimeAuditService.logEvent(groupId, sessionId, eventType, playerId, message, options)
   } catch (err) {
     console.error('[player-runtime.service] audit log failed:', err)
   }

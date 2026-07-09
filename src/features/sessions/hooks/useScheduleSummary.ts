@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { schedulePersistenceService } from '../services/schedule-persistence.service'
+import { useCurrentGroupStore } from '@/app/store/current-group.store'
 
 /**
  * Read-only schedule summary queries — used by the Dashboard, Session
@@ -14,11 +15,17 @@ import { schedulePersistenceService } from '../services/schedule-persistence.ser
  * sessions lists instead of loading a full schedule per session.
  */
 export function useFormatIdsForSessionsQuery(sessionIds: readonly string[]) {
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
   const key = [...sessionIds].sort()
   return useQuery({
     queryKey: ['sessions', 'formatIdsForSessions', key] as const,
-    queryFn: () => schedulePersistenceService.getFormatIdsForSessions(key),
-    enabled: key.length > 0,
+    queryFn: () => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error('No current group selected'))
+      }
+      return schedulePersistenceService.getFormatIdsForSessions(currentGroupId, key)
+    },
+    enabled: Boolean(currentGroupId) && key.length > 0,
   })
 }
 
@@ -29,10 +36,17 @@ export function useFormatIdsForSessionsQuery(sessionIds: readonly string[]) {
  * reuse the same cache entry instead of fetching it twice.
  */
 export function useSessionScheduleQuery(sessionId: string | undefined) {
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
+
   return useQuery({
     queryKey: ['sessions', sessionId, 'scheduleSummary'] as const,
-    queryFn: () => schedulePersistenceService.loadSchedule(sessionId!),
-    enabled: Boolean(sessionId),
+    queryFn: () => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error('No current group selected'))
+      }
+      return schedulePersistenceService.loadSchedule(currentGroupId, sessionId!)
+    },
+    enabled: Boolean(currentGroupId) && Boolean(sessionId),
   })
 }
 
@@ -43,10 +57,16 @@ export function useSessionScheduleQuery(sessionId: string | undefined) {
  * useSessionScheduleQuery per attended session.
  */
 export function useMatchesForSessionsQuery(sessionIds: readonly string[]) {
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
   const key = [...sessionIds].sort()
   return useQuery({
     queryKey: ['sessions', 'matchesForSessions', key] as const,
-    queryFn: () => schedulePersistenceService.getMatchesForSessions(key),
-    enabled: key.length > 0,
+    queryFn: () => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error('No current group selected'))
+      }
+      return schedulePersistenceService.getMatchesForSessions(currentGroupId, key)
+    },
+    enabled: Boolean(currentGroupId) && key.length > 0,
   })
 }

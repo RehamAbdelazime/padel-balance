@@ -28,19 +28,20 @@ import { runtimeAuditService } from './runtime-audit.service'
  * pressing something.
  */
 
-function persistInBackground(sessionId: string, schedule: SessionSchedule): void {
-  void schedulePersistenceService.saveSchedule(sessionId, schedule).catch(err => {
+function persistInBackground(groupId: string, sessionId: string, schedule: SessionSchedule): void {
+  void schedulePersistenceService.saveSchedule(groupId, sessionId, schedule).catch(err => {
     console.error('[match-runtime.service] background save failed:', err)
   })
 }
 
 function logEvent(
+  groupId: string,
   sessionId: string,
-  eventType: Parameters<typeof runtimeAuditService.logEvent>[1],
+  eventType: Parameters<typeof runtimeAuditService.logEvent>[2],
   message: string,
   options?: { roundNumber?: number },
 ): void {
-  void runtimeAuditService.logEvent(sessionId, eventType, null, message, options).catch(err => {
+  void runtimeAuditService.logEvent(groupId, sessionId, eventType, null, message, options).catch(err => {
     console.error('[match-runtime.service] audit log failed:', err)
   })
 }
@@ -50,6 +51,7 @@ function logEvent(
  * side may be null (not yet typed). Never changes matchStatus or isCompleted.
  */
 function setLiveScore(
+  groupId: string,
   schedule: SessionSchedule,
   matchId: string,
   score: LiveMatchScore,
@@ -64,7 +66,7 @@ function setLiveScore(
   const updatedMatch: PlannedMatch = { ...match, result: score }
   const newMatches = schedule.matches.map((m, i) => (i === idx ? updatedMatch : m))
   const updated = nextSchedule(schedule, { matches: newMatches })
-  persistInBackground(schedule.sessionId, updated)
+  persistInBackground(groupId, schedule.sessionId, updated)
   return updated
 }
 
@@ -77,6 +79,7 @@ function setLiveScore(
  * which is what actually gates "the next round becomes available").
  */
 function logRoundCompletionIfNeeded(
+  groupId: string,
   matches: readonly PlannedMatch[],
   courtCount: number,
   sessionId: string,
@@ -89,7 +92,7 @@ function logRoundCompletionIfNeeded(
   const status = deriveRoundStatus(round)
   if (status !== 'FINISHED' && status !== 'CANCELLED') return
 
-  logEvent(sessionId, 'ROUND_FINISHED', `Round ${round.roundNumber} finished.`, { roundNumber: round.roundNumber })
+  logEvent(groupId, sessionId, 'ROUND_FINISHED', `Round ${round.roundNumber} finished.`, { roundNumber: round.roundNumber })
 }
 
 /**
@@ -106,6 +109,7 @@ function logRoundCompletionIfNeeded(
  *     (can happen across courts within the same round with some formats).
  */
 function startMatch(
+  groupId: string,
   schedule: SessionSchedule,
   matchId: string,
   courtCount: number,
@@ -152,16 +156,16 @@ function startMatch(
   const liveMatch: PlannedMatch = { ...match, matchStatus: 'LIVE' }
   const newMatches = schedule.matches.map((m, i) => (i === idx ? liveMatch : m))
   const updated = nextSchedule(schedule, { matches: newMatches })
-  persistInBackground(schedule.sessionId, updated)
+  persistInBackground(groupId, schedule.sessionId, updated)
 
-  logEvent(schedule.sessionId, 'ROUND_STARTED', `Match started${match.courtNumber !== null ? ` on Court ${match.courtNumber}` : ''}.`,
+  logEvent(groupId, schedule.sessionId, 'ROUND_STARTED', `Match started${match.courtNumber !== null ? ` on Court ${match.courtNumber}` : ''}.`,
     matchRound ? { roundNumber: matchRound.roundNumber } : undefined)
 
   return updated
 }
 
 /** Once every round is terminal (FINISHED/CANCELLED), the session finishes itself — no organiser action required. */
-function finishSessionIfComplete(matches: readonly PlannedMatch[], courtCount: number, sessionId: string): void {
+function finishSessionIfComplete(groupId: string, matches: readonly PlannedMatch[], courtCount: number, sessionId: string): void {
   const rounds = groupMatchesIntoRounds(matches, courtCount)
   const allTerminal = rounds.length > 0 && rounds.every(r => {
     const status = deriveRoundStatus(r)
@@ -172,7 +176,7 @@ function finishSessionIfComplete(matches: readonly PlannedMatch[], courtCount: n
   void sessionsService.finishSession(sessionId).catch(err => {
     console.error('[match-runtime.service] auto-finish session failed:', err)
   })
-  logEvent(sessionId, 'SESSION_FINISHED', 'Session finished automatically — every round is complete.')
+  logEvent(groupId, sessionId, 'SESSION_FINISHED', 'Session finished automatically — every round is complete.')
 }
 
 /**
@@ -185,6 +189,7 @@ function finishSessionIfComplete(matches: readonly PlannedMatch[], courtCount: n
  *   equal (this format does not allow draws).
  */
 function finishMatch(
+  groupId: string,
   schedule: SessionSchedule,
   matchId: string,
   courtCount: number,
@@ -216,11 +221,11 @@ function finishMatch(
 
   const withFinishedMatch = schedule.matches.map((m, i) => (i === idx ? finishedMatch : m))
   const updated           = nextSchedule(schedule, { matches: withFinishedMatch })
-  persistInBackground(schedule.sessionId, updated)
+  persistInBackground(groupId, schedule.sessionId, updated)
 
-  logEvent(schedule.sessionId, 'MATCH_FINISHED', `Match finished: ${team1}–${team2}.`)
-  logRoundCompletionIfNeeded(withFinishedMatch, courtCount, schedule.sessionId, matchId)
-  finishSessionIfComplete(withFinishedMatch, courtCount, schedule.sessionId)
+  logEvent(groupId, schedule.sessionId, 'MATCH_FINISHED', `Match finished: ${team1}–${team2}.`)
+  logRoundCompletionIfNeeded(groupId, withFinishedMatch, courtCount, schedule.sessionId, matchId)
+  finishSessionIfComplete(groupId, withFinishedMatch, courtCount, schedule.sessionId)
 
   return updated
 }
@@ -233,6 +238,7 @@ function finishMatch(
  * Match does.
  */
 function cancelMatch(
+  groupId: string,
   schedule: SessionSchedule,
   matchId: string,
   courtCount: number,
@@ -247,11 +253,11 @@ function cancelMatch(
   const cancelledMatch: PlannedMatch = { ...match, matchStatus: 'CANCELLED' }
   const withCancelledMatch = schedule.matches.map((m, i) => (i === idx ? cancelledMatch : m))
   const updated            = nextSchedule(schedule, { matches: withCancelledMatch })
-  persistInBackground(schedule.sessionId, updated)
+  persistInBackground(groupId, schedule.sessionId, updated)
 
-  logEvent(schedule.sessionId, 'MATCH_CANCELLED', 'Match cancelled.')
-  logRoundCompletionIfNeeded(withCancelledMatch, courtCount, schedule.sessionId, matchId)
-  finishSessionIfComplete(withCancelledMatch, courtCount, schedule.sessionId)
+  logEvent(groupId, schedule.sessionId, 'MATCH_CANCELLED', 'Match cancelled.')
+  logRoundCompletionIfNeeded(groupId, withCancelledMatch, courtCount, schedule.sessionId, matchId)
+  finishSessionIfComplete(groupId, withCancelledMatch, courtCount, schedule.sessionId)
 
   return updated
 }
