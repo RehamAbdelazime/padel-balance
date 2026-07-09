@@ -14,9 +14,39 @@ import type { MatchWithTeams, CreateMatchData } from '../types'
  * tables). A real fix requires a single Postgres RPC wrapping all 5 inserts
  * in one transaction, which is a schema migration requiring its own
  * explicit sprint approval — not attempted here.
+ *
+ * All operations are group-scoped: match_teams/match_team_players have no
+ * group_id column of their own, so group membership is enforced via the
+ * related matches/sessions rows.
  */
 
-async function getSessionMatches(sessionId: string): Promise<MatchWithTeams[]> {
+/** Throws unless the session belongs to groupId. */
+async function assertSessionInGroup(groupId: string, sessionId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('id')
+    .eq('id', sessionId)
+    .eq('group_id', groupId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error('Session does not belong to the current group')
+}
+
+/** Throws unless the match belongs to groupId. */
+async function assertMatchInGroup(groupId: string, matchId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('matches')
+    .select('id')
+    .eq('id', matchId)
+    .eq('group_id', groupId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error('Match does not belong to the current group')
+}
+
+async function getSessionMatches(groupId: string, sessionId: string): Promise<MatchWithTeams[]> {
   const { data, error } = await supabase
     .from('matches')
     .select(`
@@ -40,6 +70,7 @@ async function getSessionMatches(sessionId: string): Promise<MatchWithTeams[]> {
       )
     `)
     .eq('session_id', sessionId)
+    .eq('group_id', groupId)
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(error.message)
@@ -54,10 +85,12 @@ async function getSessionMatches(sessionId: string): Promise<MatchWithTeams[]> {
   }))
 }
 
-async function createMatch(sessionId: string, input: CreateMatchData): Promise<void> {
+async function createMatch(groupId: string, sessionId: string, input: CreateMatchData): Promise<void> {
+  await assertSessionInGroup(groupId, sessionId)
+
   const { data: match, error: matchErr } = await supabase
     .from('matches')
-    .insert({ session_id: sessionId })
+    .insert({ session_id: sessionId, group_id: groupId })
     .select('id')
     .single()
   if (matchErr) throw new Error(matchErr.message)
@@ -99,10 +132,13 @@ async function createMatch(sessionId: string, input: CreateMatchData): Promise<v
  * Requires the mt_update_all RLS policy from migration 003.
  */
 async function updateScores(
+  groupId: string,
   matchId: string,
   team1Score: number,
   team2Score: number,
 ): Promise<void> {
+  await assertMatchInGroup(groupId, matchId)
+
   const { error: e1 } = await supabase
     .from('match_teams')
     .update({ score: team1Score })

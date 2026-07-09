@@ -4,23 +4,38 @@ import { toast } from 'sonner'
 import { matchesService } from '../services/matches.service'
 import { sessionQueryKeys } from './useSessions'
 import { friendlyMatchErrorMessage } from '../utils'
+import { useCurrentGroupStore } from '@/app/store/current-group.store'
 import type { CreateMatchData } from '../types'
 
+const NO_CURRENT_GROUP_ERROR = 'No current group selected'
+
 export function useSessionMatchesQuery(sessionId: string) {
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
+
   return useQuery({
     queryKey: sessionQueryKeys.matches(sessionId),
-    queryFn: () => matchesService.getSessionMatches(sessionId),
-    enabled: Boolean(sessionId),
+    queryFn: () => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return matchesService.getSessionMatches(currentGroupId, sessionId)
+    },
+    enabled: Boolean(currentGroupId) && Boolean(sessionId),
   })
 }
 
 export function useCreateMatchMutation(sessionId: string) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
 
   return useMutation({
-    mutationFn: (data: CreateMatchData) =>
-      matchesService.createMatch(sessionId, data),
+    mutationFn: (data: CreateMatchData) => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return matchesService.createMatch(currentGroupId, sessionId, data)
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: sessionQueryKeys.matches(sessionId),
@@ -39,6 +54,7 @@ export function useCreateMatchMutation(sessionId: string) {
 export function useUpdateMatchScoresMutation(sessionId: string) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const currentGroupId = useCurrentGroupStore((store) => store.currentGroupId)
 
   return useMutation({
     mutationFn: ({
@@ -49,7 +65,12 @@ export function useUpdateMatchScoresMutation(sessionId: string) {
       matchId: string
       team1Score: number
       team2Score: number
-    }) => matchesService.updateScores(matchId, team1Score, team2Score),
+    }) => {
+      if (!currentGroupId) {
+        return Promise.reject(new Error(NO_CURRENT_GROUP_ERROR))
+      }
+      return matchesService.updateScores(currentGroupId, matchId, team1Score, team2Score)
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: sessionQueryKeys.matches(sessionId),
