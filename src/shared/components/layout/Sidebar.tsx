@@ -4,9 +4,6 @@ import {
   LayoutDashboard,
   Users,
   CalendarDays,
-  Trophy,
-  Star,
-  FileText,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
