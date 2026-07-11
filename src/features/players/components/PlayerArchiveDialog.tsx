@@ -37,18 +37,18 @@ export function PlayerArchiveDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <AlertDialogContent>
+      <AlertDialogContent className="max-w-md rounded-xl p-6">
         <AlertDialogHeader>
-          <AlertDialogTitle>
+          <AlertDialogTitle className="text-xl font-semibold">
             {t('players.archiveConfirm.title')}
           </AlertDialogTitle>
-          <AlertDialogDescription>
+          <AlertDialogDescription className="mt-2 text-sm text-muted-foreground ">
             {t('players.archiveConfirm.description', {
               name: player?.name ?? '',
             })}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
+        <AlertDialogFooter className="gap-2">
           <AlertDialogCancel disabled={archiveMutation.isPending}>
             {t('players.archiveConfirm.cancel')}
           </AlertDialogCancel>
