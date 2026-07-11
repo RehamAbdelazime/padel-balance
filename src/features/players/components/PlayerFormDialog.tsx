@@ -90,7 +90,7 @@ export function PlayerFormDialog({ player, open, onClose }: PlayerFormDialogProp
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="sm:max-w-[480px] rounded-xl p-6">
         <DialogHeader>
           <DialogTitle>
             {isEditMode ? t('players.editPlayer') : t('players.addPlayer')}
@@ -98,7 +98,7 @@ export function PlayerFormDialog({ player, open, onClose }: PlayerFormDialogProp
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* Name */}
             <FormField
               control={form.control}
@@ -125,7 +125,7 @@ export function PlayerFormDialog({ player, open, onClose }: PlayerFormDialogProp
                 <FormItem>
                   <FormLabel>{t('players.form.phone')}</FormLabel>
                   <FormControl>
-                    <Input
+                    <Input className="h-12"
                       type="tel"
                       placeholder={t('players.form.phonePlaceholder')}
                       {...field}
@@ -137,7 +137,7 @@ export function PlayerFormDialog({ player, open, onClose }: PlayerFormDialogProp
               )}
             />
 
-            <DialogFooter className="pt-2">
+            <DialogFooter className="gap-2 pt-4">
               <Button
                 type="button"
                 variant="outline"
@@ -146,7 +146,7 @@ export function PlayerFormDialog({ player, open, onClose }: PlayerFormDialogProp
               >
                 {t('players.form.cancel')}
               </Button>
-              <Button type="submit" disabled={isPending}>
+              <Button className="min-w-24" type="submit" disabled={isPending}>
                 {isPending ? t('players.form.saving') : t('players.form.save')}
               </Button>
             </DialogFooter>
