@@ -32,9 +32,11 @@ export function PlayerOverviewCards({ overview }: PlayerOverviewCardsProps) {
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
       {stats.map(stat => (
         <Card key={stat.label}>
-          <CardContent className="flex flex-col items-center gap-1 py-4 text-center">
+          <CardContent className="flex flex-col items-center justify-center gap-2 py-6 text-center">
             <span className="text-2xl font-bold tabular-nums">{stat.value}</span>
-            <span className="text-xs text-muted-foreground">{stat.label}</span>
+            <span className="text-xs leading-relaxed text-muted-foreground">
+              {stat.label}
+            </span>
           </CardContent>
         </Card>
       ))}

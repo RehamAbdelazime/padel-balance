@@ -79,7 +79,7 @@ export function PlayerProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-8">
       <div className="flex items-center justify-between gap-4 print:hidden">
         <Button variant="ghost" size="sm" className="-ms-2" onClick={() => void navigate('/players')}>
           <ArrowLeft className="me-1.5 h-4 w-4" aria-hidden="true" />
