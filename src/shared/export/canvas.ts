@@ -6,7 +6,7 @@
  * actually runs.
  */
 
-const EXPORT_SCALE = 2 // high-resolution output for crisp text in PDFs and images
+const EXPORT_SCALE = 3 // high-resolution output for crisp text in PDFs and images
 
 export async function renderNodeToCanvas(node: HTMLElement): Promise<HTMLCanvasElement> {
   const { default: html2canvas } = await import('html2canvas')
