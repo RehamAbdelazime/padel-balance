@@ -67,7 +67,7 @@ export function PlayerProfilePage() {
     .map(([id, name]) => ({ id, name }))
   const formatOptions = [...new Set(profile.sessionHistory.map(s => s.formatId).filter((f): f is string => f !== null))]
     .map(id => ({ id, name: getFormat(id)?.name ?? id }))
-  const partnerOptions  = profile.partners.map(p => ({ id: p.partnerId, name: p.partnerName }))
+  const partnerOptions = profile.partners.map(p => ({ id: p.partnerId, name: p.partnerName }))
   const opponentOptions = profile.opponents.map(o => ({ id: o.opponentId, name: o.opponentName }))
 
   const filteredMatchHistory = filterMatchHistory(profile.matchHistory, filters)

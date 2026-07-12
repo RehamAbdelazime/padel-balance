@@ -16,20 +16,33 @@ export function PlayerProfileHeader({ player, overview }: PlayerProfileHeaderPro
   const dateLabel = (iso: string | null) =>
     iso ? new Date(iso).toLocaleDateString(i18n.language, { year: 'numeric', month: 'long', day: 'numeric' }) : '—'
 
+  const statusBadgeClassName = player.archived
+    ? 'inline-flex h-6 items-center justify-center rounded-full px-3 text-[11px] font-semibold leading-none'
+    : 'inline-flex h-6 items-center justify-center rounded-full bg-green-600 px-3 text-[11px] font-semibold leading-none text-white'
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:text-start">
         <div
-          className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-full text-2xl font-bold text-white ${getAvatarColor(player.name)}`}
+          className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-full text-2xl font-bold leading-none text-white ${getAvatarColor(player.name)}`}
         >
-          {getInitials(player.name)}
+          <span className="inline-flex items-center justify-center leading-none">{getInitials(player.name)}</span>
         </div>
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{player.name}</h1>
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-2 sm:justify-start">            <Badge variant={player.archived ? 'secondary' : 'default'}>
-            {player.archived ? t('players.profile.archived') : t('players.profile.active')}
-          </Badge>
-            {player.phone && <span className="text-sm text-muted-foreground">{player.phone}</span>}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
+            <Badge
+              variant={player.archived ? 'secondary' : 'default'}
+              className={statusBadgeClassName}
+            >
+              {player.archived ? t('players.profile.archived') : t('players.profile.active')}
+            </Badge>
+
+            {player.phone && (
+              <span className="text-sm text-muted-foreground">
+                {player.phone}
+              </span>
+            )}
           </div>
         </div>
       </div>

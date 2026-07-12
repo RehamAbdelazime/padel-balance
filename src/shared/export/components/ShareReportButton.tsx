@@ -55,8 +55,10 @@ export function ShareReportButton({ source }: ShareReportButtonProps) {
           break
         }
         case 'print': {
-          printCurrentPage()
           setOpen(false)
+          requestAnimationFrame(() => {
+            printCurrentPage()
+          })
           break
         }
         case 'copy': {

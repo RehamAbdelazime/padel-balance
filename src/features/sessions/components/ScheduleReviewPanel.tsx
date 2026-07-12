@@ -333,7 +333,7 @@ export function ScheduleReviewPanel({
       {/* Off-screen printable schedule — export source of truth. Never
           visible to the organiser; rendered only so html2canvas has a real
           laid-out DOM node to rasterize. */}
-      <div style={{ position: 'fixed', top: 0, left: '-10000px', pointerEvents: 'none' }} aria-hidden="true">
+      <div className="print:hidden" style={{ position: 'fixed', top: 0, left: '-10000px', pointerEvents: 'none' }} aria-hidden="true">
         <SchedulePrintout
           ref={printoutRef}
           sessionName={session.name}

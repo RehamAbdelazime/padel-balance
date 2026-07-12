@@ -10,13 +10,27 @@ const EXPORT_SCALE = 3 // high-resolution output for crisp text in PDFs and imag
 
 export async function renderNodeToCanvas(node: HTMLElement): Promise<HTMLCanvasElement> {
   const { default: html2canvas } = await import('html2canvas')
-  return html2canvas(node, {
-    scale:           EXPORT_SCALE,
-    backgroundColor: '#ffffff',
-    useCORS:         true,
-  })
-}
 
+  const canvas = await html2canvas(node, {
+  scale: EXPORT_SCALE,
+  backgroundColor: "#fff",
+  useCORS: true,
+  logging: true,
+
+  onclone: (doc) => {
+    console.log(
+      "Badge font:",
+      getComputedStyle(doc.querySelector("[class*='rounded-full']")!).fontFamily
+    )
+  },
+})
+
+  console.log('Canvas size:', canvas.width, canvas.height)
+
+  document.body.appendChild(canvas) // <-- أضيفي هذا السطر مؤقتًا
+
+  return canvas
+}
 export function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(blob => {
